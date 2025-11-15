@@ -248,13 +248,10 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 
 void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2){ // 平顶三角形
 	CanvasPoint midLp, midRp;
-	if (mid.x > extraP.x)
-	{
+	if (mid.x > extraP.x){
 		midRp = mid;
 		midLp = extraP;
-	}
-	else
-	{
+	}else{
 		midRp = extraP;
 		midLp = mid;
 	}
@@ -262,18 +259,18 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	float dxL = (bottom.x - midLp.x) / (bottom.y - midLp.y); // 每下降1个像素行，x变化多少
 	float dxR = (bottom.x - midRp.x) / (bottom.y - midRp.y);
 
-	int yStart = (int)midLp.y + 1;
-	int yEnd = (int)bottom.y;
+	int yStart = (int)std::ceil(midLp.y);
+	int yEnd = (int)std::floor(bottom.y);
 
 	uint32_t colourValue = (255u << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + (uint32_t(colour.blue));
 
 	for (int y = yStart; y < yEnd; y++){
-		float xLstart = midLp.x + (y - midLp.y) * dxL;
-        float xRstart = midRp.x + (y - midRp.y) * dxR;
+		int xLstart = (int)std::floor(midLp.x + (y - midLp.y) * dxL);
+        int xRstart = (int)std::ceil(midRp.x + (y - midRp.y) * dxR);
         
 		for (int x = xLstart; x < xRstart; x++){ //遍历每个像素
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-				// 使用重心坐标计算深度（和你的 store.cpp 一样的顺序）
+				// 使用重心坐标判断是否在三角形内
 				glm::vec3 baryCentric = convertToBarycentricCoordinates(
 					glm::vec2(v0.x, v0.y), 
 					glm::vec2(v1.x, v1.y), 
@@ -281,12 +278,15 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// 注意顺序：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
-				float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
-				
-				if (pixelDepth > depths[y][x]) {
-					window.setPixelColour(x, y, colourValue);
-					depths[y][x] = pixelDepth;
+				// 只有重心坐标全部非负才绘制（确保在三角形内）
+				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0) {
+					// 计算深度：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
+					
+					if (pixelDepth > depths[y][x]) {
+						window.setPixelColour(x, y, colourValue);
+						depths[y][x] = pixelDepth;
+					}
 				}
 			}
 		}
@@ -298,8 +298,7 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 	if (mid.x > extraP.x){
 		midRp = mid;
 		midLp = extraP;
-	}
-	else{
+	}else{
 		midRp = extraP;
 		midLp = mid;
 	}
@@ -307,17 +306,17 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 	float dxL = (midLp.x - top.x) / (midLp.y - top.y); // 每1个像素行，x变化多少
 	float dxR = (midRp.x - top.x) / (midRp.y - top.y);
 
-	int yStart = (int)top.y + 1;
-	int yEnd = (int)midLp.y;
+	int yStart = (int)std::ceil(top.y);
+	int yEnd = (int)std::floor(midLp.y);
 
 	uint32_t colourValue = (255u << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + (uint32_t(colour.blue));
 	for (int y = yStart; y <= yEnd; y++){ // y<=
-		float xLstart = top.x + (y - top.y) * dxL;
-        float xRstart = top.x + (y - top.y) * dxR;
+		int xLstart = (int)std::floor(top.x + (y - top.y) * dxL);
+        int xRstart = (int)std::ceil(top.x + (y - top.y) * dxR);
 
 		for (int x = xLstart; x < xRstart; x++){
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-				// 使用重心坐标计算深度（和你的 store.cpp 一样的顺序）
+
 				glm::vec3 baryCentric = convertToBarycentricCoordinates(
 					glm::vec2(v0.x, v0.y), 
 					glm::vec2(v1.x, v1.y), 
@@ -325,12 +324,15 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// 注意顺序：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
-				float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
-				
-				if (pixelDepth > depths[y][x]) {
-					window.setPixelColour(x, y, colourValue);
-					depths[y][x] = pixelDepth;
+				// 只有重心坐标全部非负才绘制-确保在三角形内
+				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0) {
+					// 计算深度：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
+					
+					if (pixelDepth > depths[y][x]) {
+						window.setPixelColour(x, y, colourValue);
+						depths[y][x] = pixelDepth;
+					}
 				}
 			}
 		}	
@@ -378,7 +380,7 @@ bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& tri
 	float distToLight = glm::length(toLight);
     if (distToLight <= 0.0f) return false; // 极端：光源与点重合
 
-	const float v = 1e-4f;                       // 可调：1e-5 ~ 5e-4
+	const float v = 1e-4f;
     glm::vec3 RayOrigin = point + direction * v; 
 
     RayTriangleIntersection intersection = getClosestValidIntersection(RayOrigin,direction,triangles);
@@ -424,7 +426,7 @@ void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, 
 		}
 		
 		CanvasTriangle canvasTriangle(projectedPoint0,projectedPoint1,projectedPoint2);
-		drawStrokedTriangle(window, canvasTriangle, triangle.colour, depths);  // 使用三角形的颜色
+		drawStrokedTriangle(window, canvasTriangle, triangle.colour, depths);
     }
 }
 

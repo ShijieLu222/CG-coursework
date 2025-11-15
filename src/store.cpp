@@ -346,13 +346,10 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 void fillFlatTopTexturedTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, const TextureMap &Texture)
 {
 	CanvasPoint midLp, midRp;
-	if (mid.x > extraP.x)
-	{
+	if (mid.x > extraP.x){
 		midRp = mid;
 		midLp = extraP;
-	}
-	else
-	{
+	}else{
 		midRp = extraP;
 		midLp = mid;
 	}
@@ -377,10 +374,8 @@ void fillFlatTopTexturedTriangle(DrawingWindow &window, CanvasPoint bottom, Canv
 	float uR = midRp.texturePoint.x + (yStart - midRp.y) * du_dy_R;
 	float vR = midRp.texturePoint.y + (yStart - midRp.y) * dv_dy_R;
 
-	for (float y = yStart; y < yEnd; y++)
-	{
-		for (float x = xLstart; x < xRstart; x++)
-		{
+	for (float y = yStart; y < yEnd; y++){
+		for (float x = xLstart; x < xRstart; x++){
 			float ratio = (x - xLstart) / (xRstart - xLstart); // 表示从左到右走了多少“百分比
 			// float u = uL + ratio * (uR - uL);				   // u,v 是这个屏幕像素在纹理图里对应的位置。
 			float v = vL + ratio * (vR - vL);
