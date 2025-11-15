@@ -411,9 +411,7 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 	}
 }
 
-void drawWireframeScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cameraOrientation,float focalLength,const std::vector<ModelTriangle> &triangles) {
-    // 初始化深度缓冲
-    std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
+void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths) {
     const float minValidDepth = 0.0f;
 
     for (ModelTriangle triangle : triangles){
@@ -430,13 +428,7 @@ void drawWireframeScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
     }
 }
 
-void drawRasterisedFilledScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cameraOrientation,float focalLength,const std::vector<ModelTriangle> &triangles) {
-    // initiallise depth buffer
-    std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
-    for (int y = 0; y < HEIGHT; ++y)
-        for (int x = 0; x < WIDTH; ++x)
-            depths[y][x] = 0.0f;
-
+void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths) {
 	const float minValidDepth = 0.0f;
 	for (ModelTriangle triangle : triangles){
 			CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
@@ -515,7 +507,7 @@ int main(int argc, char *argv[]){
     std::vector<ModelTriangle> trianglesLogo = loadOBJ("hackspace-logo/logo.obj", paletteLogo, 0.0035f);
 
 	while (true){
-		// We MUST poll for events - otherwise the window will freeze !
+
 		if (window.pollForInputEvents(event))
 			handleEvent(event, window);
 
@@ -524,16 +516,19 @@ int main(int argc, char *argv[]){
         	cameraOrientation = lookAt(cameraPosition, sceneCenter);
     	} 
 
-		window.clearPixels();
-		
-		switch (Mode) {
+	window.clearPixels();
+	
+	// 为每一帧创建一次深度缓冲，所有物体共享
+	std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
+	
+	switch (Mode) {
         case RenderMode::Wireframe:
-            drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox);
-			drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo);
+            drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox, depths);
+			drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
             break;
         case RenderMode::Rasterised:
-            drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox);
-			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo);
+            drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox, depths);
+			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
             break;
         case RenderMode::RayTraced:
             drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox);
