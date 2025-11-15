@@ -1,0 +1,32 @@
+# Build directories
+build/
+cmake-build-debug/
+.idea/
+
+# Compiled files
+*.o
+*.a
+*.dylib
+*.so
+Makefile
+
+# Output files
+output.bmp
+output.ppm
+*.ppm
+*.bmp
+
+# System files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+
+# Executable
+RedNoise
+
