@@ -176,27 +176,37 @@ RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosit
     return bestIntercetion;
 }
 
-void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint &to, const Colour &colour){
+void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint &to, const Colour &colour, std::vector<std::vector<float>> &depths){
 	float xDiff = to.x - from.x;
 	float yDiff = to.y - from.y;
 	float numberOfSteps = std::max(abs(xDiff), abs(yDiff));
 	float xStepSize = xDiff / numberOfSteps;
 	float yStepSize = yDiff / numberOfSteps;
+	float depthStep = (to.depth - from.depth) / numberOfSteps;  // 深度插值步长
+	
 	uint32_t colourValue = (255u << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue);
+	
 	for (float i = 0.0; i <= numberOfSteps; i++){
 		float x = from.x + xStepSize * i;
 		float y = from.y + yStepSize * i;
+		float depth = from.depth + depthStep * i;  // 当前像素的深度
 
 		if (x >= 0 && x < window.width && y >= 0 && y < window.height){
-			window.setPixelColour(round(x), round(y), colourValue);
+			int xi = round(x);
+			int yi = round(y);
+			
+			if (depth != 0 && (depths[yi][xi] == 0 || 1.0f/depth > depths[yi][xi])){
+				window.setPixelColour(xi, yi, colourValue);
+				depths[yi][xi] = 1.0f/depth;  // 更新深度缓冲
+			}
 		}
 	}
 }
 
-void drawStrokedTriangle(DrawingWindow &window, const CanvasTriangle &triangle, const Colour &colour){
-	drawLine(window, triangle.vertices[0], triangle.vertices[1], colour);
-	drawLine(window, triangle.vertices[1], triangle.vertices[2], colour);
-	drawLine(window, triangle.vertices[2], triangle.vertices[0], colour);
+void drawStrokedTriangle(DrawingWindow &window, const CanvasTriangle &triangle, const Colour &colour, std::vector<std::vector<float>> &depths){
+	drawLine(window, triangle.vertices[0], triangle.vertices[1], colour, depths);
+	drawLine(window, triangle.vertices[1], triangle.vertices[2], colour, depths);
+	drawLine(window, triangle.vertices[2], triangle.vertices[0], colour, depths);
 }
 
 std::vector<CanvasPoint> sortByY(const CanvasTriangle &triangle){
@@ -392,24 +402,21 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 }
 
 void drawWireframeScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cameraOrientation,float focalLength,const std::vector<ModelTriangle> &triangles) {
+    // 初始化深度缓冲
+    std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
+    const float minValidDepth = 0.0f;
 
-    Colour white(255,255,255);
     for (ModelTriangle triangle : triangles){
-			CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
-			CanvasPoint projectedPoint1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
-			CanvasPoint projectedPoint2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
-			
-			// 检查深度值，过滤掉在相机后面或太近的三角形
-			const float minValidDepth = 0.0f;
-			const float maxValidDepth = 100.0f;
-			if (projectedPoint0.depth < minValidDepth || projectedPoint0.depth > maxValidDepth ||
-			    projectedPoint1.depth < minValidDepth || projectedPoint1.depth > maxValidDepth ||
-			    projectedPoint2.depth < minValidDepth || projectedPoint2.depth > maxValidDepth) {
-				continue; // 跳过这个三角形
-			}
-			
-			CanvasTriangle canvasTriangle(projectedPoint0,projectedPoint1,projectedPoint2);
-			drawStrokedTriangle(window,canvasTriangle,white);
+		CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
+		CanvasPoint projectedPoint1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
+		CanvasPoint projectedPoint2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
+		
+		if (projectedPoint0.depth < minValidDepth  ||projectedPoint1.depth < minValidDepth ||projectedPoint2.depth < minValidDepth ) {
+			continue;
+		}
+		
+		CanvasTriangle canvasTriangle(projectedPoint0,projectedPoint1,projectedPoint2);
+		drawStrokedTriangle(window, canvasTriangle, triangle.colour, depths);  // 使用三角形的颜色
     }
 }
 
@@ -438,9 +445,9 @@ void drawRasterisedFilledScene(DrawingWindow &window,const glm::vec3 &cameraPosi
 
 
 void handleEvent(SDL_Event event, DrawingWindow &window){
-	float rotation = glm::radians(5.0f);      // 每次转 
+	float rotation = glm::radians(5.0f);      // 每次转
 	float orientation = glm::radians(5.0f);   // 旋转朝向
-	static float translation  = 0.25f;         // 平移
+	static float translation  = 0.25f;        // 平移
 
 	if (event.type == SDL_KEYDOWN){
 		if (event.key.keysym.sym == SDLK_LEFT){
@@ -459,29 +466,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 			std::cout << "DOWN" << std::endl;
 			cameraPosition = sceneCenter + rotX(-rotation)*(cameraPosition-sceneCenter);
 			cameraOrientation = lookAt(cameraPosition, sceneCenter);
-		}else if (event.key.keysym.sym == SDLK_u){
-			CanvasTriangle tri(
-				CanvasPoint(rand() % window.width, rand() % window.height),
-				CanvasPoint(rand() % window.width, rand() % window.height),
-				CanvasPoint(rand() % window.width, rand() % window.height));
-			Colour colour(rand() % 256, rand() % 256, rand() % 256);
-			drawStrokedTriangle(window, tri, colour);
-		}else if (event.key.keysym.sym == SDLK_f){// 当按下 f 键时，随机画一个三角形
-			CanvasTriangle tri(
-				CanvasPoint(rand() % window.width, rand() % window.height),
-				CanvasPoint(rand() % window.width, rand() % window.height),
-				CanvasPoint(rand() % window.width, rand() % window.height)
-			);
-			Colour randomColour(
-				rand() % 256, // red
-				rand() % 256, // green
-				rand() % 256  // blue
-			);
-
-			std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
-			drawFilledTriangle(window, tri, randomColour,depths);
 		}
-
 		switch (event.key.keysym.sym){
 		case SDLK_1:Mode = RenderMode::Wireframe;break;
         case SDLK_2:Mode = RenderMode::Rasterised;break;
