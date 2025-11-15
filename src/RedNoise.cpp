@@ -246,7 +246,7 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	return extraP;
 }
 
-void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour,std::vector<std::vector<float>> &depths){ // 平顶三角形
+void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2){ // 平顶三角形
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x)
 	{
@@ -262,10 +262,6 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	float dxL = (bottom.x - midLp.x) / (bottom.y - midLp.y); // 每下降1个像素行，x变化多少
 	float dxR = (bottom.x - midRp.x) / (bottom.y - midRp.y);
 
-	//add depth rate -lab-4-task 9 y变化一个，深度变化多少
-	float dDepthxL =(bottom.depth - midLp.depth) / (bottom.y - midLp.y);
-	float dDepthxR =(bottom.depth - midRp.depth) / (bottom.y - midRp.y);
-
 	int yStart = (int)midLp.y + 1;
 	int yEnd = (int)bottom.y;
 
@@ -274,12 +270,20 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	for (int y = yStart; y < yEnd; y++){
 		float xLstart = midLp.x + (y - midLp.y) * dxL;
         float xRstart = midRp.x + (y - midRp.y) * dxR;
-        float depthLstart = midLp.depth + (y - midLp.y) * dDepthxL;
-        float depthRstart = midRp.depth + (y - midRp.y) * dDepthxR;
+        
 		for (int x = xLstart; x < xRstart; x++){ //遍历每个像素
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-				float ratio = (x - xLstart) / (xRstart - xLstart);// 计算 x 在 [xL, xR] 区间上的比例
-				float pixelDepth = depthLstart + ratio * (depthRstart - depthLstart);
+				// 使用重心坐标计算深度（和你的 store.cpp 一样的顺序）
+				glm::vec3 baryCentric = convertToBarycentricCoordinates(
+					glm::vec2(v0.x, v0.y), 
+					glm::vec2(v1.x, v1.y), 
+					glm::vec2(v2.x, v2.y), 
+					glm::vec2(x, y)
+				);
+				
+				// 注意顺序：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+				float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
+				
 				if (pixelDepth > depths[y][x]) {
 					window.setPixelColour(x, y, colourValue);
 					depths[y][x] = pixelDepth;
@@ -289,7 +293,7 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	}
 }
 
-void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour,std::vector<std::vector<float>> &depths){ // 顶角三角形
+void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2){ // 顶角三角形
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
@@ -302,9 +306,6 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 
 	float dxL = (midLp.x - top.x) / (midLp.y - top.y); // 每1个像素行，x变化多少
 	float dxR = (midRp.x - top.x) / (midRp.y - top.y);
-	//for depths
-	float dDepthxL = (midLp.depth - top.depth) / (midLp.y - top.y); // 每1个像素行，depth变化多少
-	float dDepthxR = (midRp.depth - top.depth) / (midRp.y - top.y);
 
 	int yStart = (int)top.y + 1;
 	int yEnd = (int)midLp.y;
@@ -313,13 +314,20 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 	for (int y = yStart; y <= yEnd; y++){ // y<=
 		float xLstart = top.x + (y - top.y) * dxL;
         float xRstart = top.x + (y - top.y) * dxR;
-        float depthLstart = top.depth + (y - top.y) * dDepthxL;
-        float depthRstart = top.depth + (y - top.y) * dDepthxR;
 
 		for (int x = xLstart; x < xRstart; x++){
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-				float ratio = (x - xLstart) / (xRstart - xLstart);// 计算 x 在 [xL, xR] 区间上的比例
-				float pixelDepth =depthLstart + ratio * (depthRstart - depthLstart);
+				// 使用重心坐标计算深度（和你的 store.cpp 一样的顺序）
+				glm::vec3 baryCentric = convertToBarycentricCoordinates(
+					glm::vec2(v0.x, v0.y), 
+					glm::vec2(v1.x, v1.y), 
+					glm::vec2(v2.x, v2.y), 
+					glm::vec2(x, y)
+				);
+				
+				// 注意顺序：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+				float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
+				
 				if (pixelDepth > depths[y][x]) {
 					window.setPixelColour(x, y, colourValue);
 					depths[y][x] = pixelDepth;
@@ -335,8 +343,10 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 	CanvasPoint top = sortedPs[0];
 	CanvasPoint mid = sortedPs[1];
 	CanvasPoint bottom = sortedPs[2];
-	fillFlatTopTriangle(window, bottom, mid, extraP, colour,depths);
-	fillFlatBottomTriangle(window, top, mid, extraP, colour,depths);
+	
+	// 传入原始三角形顶点用于重心坐标计算
+	fillFlatTopTriangle(window, bottom, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
+	fillFlatBottomTriangle(window, top, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
 
 }
 
