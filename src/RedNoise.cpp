@@ -29,6 +29,8 @@ glm::mat3 cameraOrientation(1.0f);   // 单位矩阵，表示"朝向不转"
 glm::vec3 lightPosition(0.0f, 0.9f, 0.1f);
 const float ambientLight = 0.2f;
 
+std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;// Gouraud Shading: 存储每个三角形的顶点法线 [triangleIndex][vertexIndex]
+
 glm::mat3 rotX(float a) {
     float c = std::cos(a), s = std::sin(a);
     return glm::mat3( 1,0,0,   
@@ -39,8 +41,8 @@ glm::mat3 rotX(float a) {
 glm::mat3 rotY(float a) {
     float c = std::cos(a), s = std::sin(a);
     return glm::mat3( c,0,-s,
-		               0,1,0,
-		  			   s,0,c );
+	               0,1,0,
+	  			   s,0,c );
 }
 
 std::vector<ModelTriangle> loadOBJ(const std::string& filePath,const std::map<std::string,Colour>& palette,float scale){
@@ -165,42 +167,6 @@ CanvasPoint projectVertexOntoCanvasPoint(const glm::vec3 &cameraPosition,float f
     
 
     return CanvasPoint(u,v,depth);
-}
-
-RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles){ //lab6
-    glm::vec3 direction = glm::normalize(rayDirection); //单位化
-    float bestT = std::numeric_limits<float>::infinity(); // 当前最优（最小）t，初始为 +∞
-    RayTriangleIntersection bestIntercetion;
-    bestIntercetion.triangleIndex =SIZE_MAX; //if not intercepted
-
-    for (int i = 0; i < triangles.size(); i++) {
-
-        const ModelTriangle triangle = triangles[i];
-
-        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
-        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
-        glm::mat3 DEMatrix(-direction, e0, e1);
-        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
-
-        float t = possibleSolution.x; //沿着光线方向从相机走了多远才到交点
-        float u = possibleSolution.y; //交点在三角形第 1 条边方向上的比例
-        float v = possibleSolution.z; //交点在三角形第 2 条边方向上的比例
-        float w =1-u-v;
-
-        if (!((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1 &&t >0)) continue;        // 必须做命中判定 task3
-
-        if(t<bestT){
-            bestT = t;
-            // glm::vec3 intersection = cameraPosition + t * rayDirection;
-            glm::vec3 intersection = triangle.vertices[0] + u * e0 + v * e1;
-            bestIntercetion.distanceFromCamera =t;
-            bestIntercetion.intersectionPoint=intersection;
-            bestIntercetion.triangleIndex=i;
-            bestIntercetion.intersectedTriangle =triangle;
-        }
-    }
-    return bestIntercetion;
 }
 
 void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint &to, const Colour &colour, std::vector<std::vector<float>> &depths){
@@ -397,142 +363,6 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 
 }
 
-glm::mat3 lookAt(const glm::vec3 &camera, const glm::vec3 &target, const glm::vec3 &worldUp = {0,1,0}){ //get cameraOrientation matrix
-	glm::vec3 F = glm::normalize(target - camera);
-	glm::vec3 R = glm::normalize(glm::cross(F, worldUp));
-	glm::vec3 U = glm::normalize(glm::cross(R, F));
-
-	return glm::mat3(R.x,R.y,R.z, 
-					 U.x,U.y,U.z, 
-		            -F.x,-F.y,-F.z);
-}
-
-glm::vec3 pixelToRayDirection(int x, int y,int width, int height, float focalLength, const glm::mat3& cameraOrientation){
-	//plane的左上角的坐标系转成plane中心的坐标系统的3D点的方向向量
-	float scale =160.0f;
-	float px = (x  - width  * 0.5f)/scale;
-    float py = (y  - height * 0.5f)/scale;
-    py = -py;
-
-	glm::vec3 cameraDirection = glm::normalize(glm::vec3(px,py,-focalLength));
-	glm::vec3 RayDirection = glm::normalize(cameraOrientation * cameraDirection);// 旋到真实的世界坐标
-	return RayDirection;
-}
-
-bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& triangles){ //一个点在不在阴影里面（检测像素到相机碰撞的）
-    glm::vec3 toLight = lightPosition - point;//从 p 往光源发射阴影光线
-    glm::vec3 direction = glm::normalize(toLight);
-	float distToLight = glm::length(toLight);
-    if (distToLight <= 0.0f) return false; // 极端：光源与点重合
-
-	const float v = 1e-4f;
-    glm::vec3 RayOrigin = point + direction * v; 
-
-    RayTriangleIntersection intersection = getClosestValidIntersection(RayOrigin,direction,triangles);
-
-    if (intersection.triangleIndex == SIZE_MAX) return false;                                   // 没命中 → 不遮
-    if (intersection.triangleIndex == index && intersection.distanceFromCamera < 1e-4f) return false; // 撞回自己
-    return (intersection.distanceFromCamera < distToLight);                                     // 只接受光源之前的命中
-}
-
-float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
-	float distanceToLight = glm::length(lightPosition - target);
-	float proximity = 10.0f / (4.0f * M_PI *distanceToLight * distanceToLight);
-	return std::min(1.0f,proximity) ;
-}
-
-float calculateAngleOfIncidence(const glm::vec3& intersectionPoint, const ModelTriangle& triangle, const glm::vec3& lightPosition){
-	glm::vec3 normal  = glm::normalize(triangle.normal);
-    glm::vec3 toLight = glm::normalize(lightPosition - intersectionPoint);
-    float angle = glm::dot(normal, toLight);
-	return std::max(0.0f, angle);
-}
-
-float calculateSpecular(const glm::vec3& intersectionPoint,const ModelTriangle& triangle,const glm::vec3& lightPosition,const glm::vec3& cameraPosition) {
-
-	glm::vec3 N = glm::normalize(triangle.normal);
-	glm::vec3 L = glm::normalize(lightPosition - intersectionPoint); 
-	glm::vec3 V = glm::normalize(cameraPosition - intersectionPoint); 
-	glm::vec3 R = 2.0f * glm::dot(N, L) * N - L;
-
-	float specular = glm::dot(R, V); 
-	return std::pow(std::max(0.0f, specular), 256);
-}
-
-void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
-	for(int y = 0; y< HEIGHT;y++){
-		for(int x =0; x<WIDTH; x++ ){
-			glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
-			const float v = 1e-4f;            
-			glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
-			RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
-			
-			if(intersection.triangleIndex != SIZE_MAX){
-				glm::vec3 point = intersection.intersectionPoint;
-    			const ModelTriangle& tri = intersection.intersectedTriangle;
-				
-				float proximity = calculateProximity(point, lightPosition);
-				float angle = calculateAngleOfIncidence(point, tri, lightPosition);
-				float diffuse = proximity * angle;
-				float specular = calculateSpecular(point, tri, lightPosition, cameraPosition);
-				bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
-				
-				float Brightness;
-				if (IsShadow){
-					Brightness = ambientLight;
-				} else {
-					Brightness = ambientLight + diffuse + specular;
-					Brightness = std::min(1.0f, Brightness);
-				}
-				
-				bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||
-				                   tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||
-				                   tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
-				
-				Colour colourValue = tri.colour;
-				
-				// 如果有纹理，从纹理采样
-				if (hasTexture && texture != nullptr) {
-					glm::vec3 e0 = tri.vertices[1] - tri.vertices[0];
-					glm::vec3 e1 = tri.vertices[2] - tri.vertices[0];
-					glm::vec3 toPoint = point - tri.vertices[0];
-					
-					// 使用点乘计算重心坐标
-					float dot00 = glm::dot(e0, e0);
-					float dot01 = glm::dot(e0, e1);
-					float dot11 = glm::dot(e1, e1);
-					float dot20 = glm::dot(toPoint, e0);
-					float dot21 = glm::dot(toPoint, e1);
-					float denominator = dot00 * dot11 - dot01 * dot01;
-					
-					float v = (dot11 * dot20 - dot01 * dot21) / denominator;
-					float w = (dot00 * dot21 - dot01 * dot20) / denominator;
-					float u = 1.0f - v - w;
-					
-					// 用重心坐标插值纹理坐标
-					glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
-					glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
-					glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
-					glm::vec2 textureCoord = u * t0 + v * t1 + w * t2;
-					
-					// 从纹理采样
-					int texX = round(textureCoord.x * texture->width);
-					int texY = round(textureCoord.y * texture->height);
-					texX = std::max(0, std::min((int)texture->width - 1, texX));
-					texY = std::max(0, std::min((int)texture->height - 1, texY));
-					
-					uint32_t textureColour = texture->pixels[texY * texture->width + texX];
-					
-					colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
-				}
-				
-				uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
-				window.setPixelColour(x, y, colour);
-			}
-		}
-	}
-}
-
 void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths) {
     const float minValidDepth = 0.0f;
 
@@ -581,6 +411,203 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 	}
 }
 
+glm::mat3 lookAt(const glm::vec3 &camera, const glm::vec3 &target, const glm::vec3 &worldUp = {0,1,0}){ //get cameraOrientation matrix
+	glm::vec3 F = glm::normalize(target - camera);
+	glm::vec3 R = glm::normalize(glm::cross(F, worldUp));
+	glm::vec3 U = glm::normalize(glm::cross(R, F));
+
+	return glm::mat3(R.x,R.y,R.z, 
+					 U.x,U.y,U.z, 
+		            -F.x,-F.y,-F.z);
+}
+
+glm::vec3 pixelToRayDirection(int x, int y,int width, int height, float focalLength, const glm::mat3& cameraOrientation){
+	//plane的左上角的坐标系转成plane中心的坐标系统的3D点的方向向量
+	float scale =160.0f;
+	float px = (x  - width  * 0.5f)/scale;
+    float py = (y  - height * 0.5f)/scale;
+    py = -py;
+
+	glm::vec3 cameraDirection = glm::normalize(glm::vec3(px,py,-focalLength));
+	glm::vec3 RayDirection = glm::normalize(cameraOrientation * cameraDirection);// 旋到真实的世界坐标
+	return RayDirection;
+}
+
+RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles){ //lab6
+    glm::vec3 direction = glm::normalize(rayDirection); //单位化
+    float bestT = std::numeric_limits<float>::infinity(); // 当前最优（最小）t，初始为 +∞
+    RayTriangleIntersection bestIntercetion;
+    bestIntercetion.triangleIndex =SIZE_MAX; //if not intercepted
+
+    for (int i = 0; i < triangles.size(); i++) {
+
+        const ModelTriangle triangle = triangles[i];
+
+        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
+        glm::mat3 DEMatrix(-direction, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+        float t = possibleSolution.x; //沿着光线方向从相机走了多远才到交点
+        float u = possibleSolution.y; //交点在三角形第 1 条边方向上的比例
+        float v = possibleSolution.z; //交点在三角形第 2 条边方向上的比例
+        float w =1-u-v;
+
+        if (!((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1 &&t >0)) continue;        // 必须做命中判定 task3
+
+        if(t<bestT){
+            bestT = t;
+            // glm::vec3 intersection = cameraPosition + t * rayDirection;
+            glm::vec3 intersection = triangle.vertices[0] + u * e0 + v * e1;
+            bestIntercetion.distanceFromCamera =t;
+            bestIntercetion.intersectionPoint=intersection;
+            bestIntercetion.triangleIndex=i;
+            bestIntercetion.intersectedTriangle =triangle;
+        }
+    }
+    return bestIntercetion;
+}
+
+bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& triangles){ //一个点在不在阴影里面（检测像素到相机碰撞的）
+    glm::vec3 toLight = lightPosition - point;//从 p 往光源发射阴影光线
+    glm::vec3 direction = glm::normalize(toLight);
+	float distToLight = glm::length(toLight);
+    if (distToLight <= 0.0f) return false; // 极端：光源与点重合
+
+	const float v = 1e-4f;
+    glm::vec3 RayOrigin = point + direction * v; 
+
+    RayTriangleIntersection intersection = getClosestValidIntersection(RayOrigin,direction,triangles);
+
+    if (intersection.triangleIndex == SIZE_MAX) return false;                                   // 没命中 → 不遮
+    if (intersection.triangleIndex == index && intersection.distanceFromCamera < 1e-4f) return false; // 撞回自己
+    return (intersection.distanceFromCamera < distToLight);                                     // 只接受光源之前的命中
+}
+
+float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
+	float distanceToLight = glm::length(lightPosition - target);
+	float proximity = 10.0f / (4.0f * M_PI *distanceToLight * distanceToLight);
+	return std::min(1.0f,proximity) ;
+}
+
+float calculateAngleOfIncidence(const glm::vec3& intersectionPoint, const glm::vec3& normal, const glm::vec3& lightPosition){
+	glm::vec3 N = glm::normalize(normal);
+    glm::vec3 toLight = glm::normalize(lightPosition - intersectionPoint);
+    float angle = glm::dot(N, toLight);
+	return std::max(0.0f, angle);
+}
+
+float calculateSpecular(const glm::vec3& intersectionPoint, const glm::vec3& normal, const glm::vec3& lightPosition, const glm::vec3& cameraPosition) {
+	glm::vec3 N = glm::normalize(normal);
+	glm::vec3 L = glm::normalize(lightPosition - intersectionPoint); 
+	glm::vec3 V = glm::normalize(cameraPosition - intersectionPoint); 
+	glm::vec3 R = 2.0f * glm::dot(N, L) * N - L;
+
+	float specular = glm::dot(R, V); 
+	return std::pow(std::max(0.0f, specular), 256);
+}
+
+// 计算顶点法线
+void computeVertexNormals(const std::vector<ModelTriangle>& triangles, int startIndex = 0) {
+	std::array<glm::vec3, 3> vertexNormals;
+
+    for (int i = 0; i < triangles.size(); i++) {
+        for (int v = 0; v < 3; v++) {
+            glm::vec3 normal(0.0f);
+            glm::vec3 vertex = triangles[i].vertices[v];
+            
+            // 找到所有包含这个顶点的三角形，加起来它们的法线
+            for (int j = 0; j < triangles.size(); j++) {
+                for (int k = 0; k < 3; k++) {
+                    if (glm::length(triangles[j].vertices[k] - vertex) < 0.001f) {
+                        normal = normal + triangles[j].normal;
+                        break;
+                    }
+                }
+            }
+            
+            vertexNormals[v] = glm::normalize(normal);
+        }
+        
+        vertexNormalsMap[startIndex + i] = vertexNormals;
+    }
+}
+
+void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
+	for(int y = 0; y< HEIGHT;y++){
+		for(int x =0; x<WIDTH; x++ ){
+			glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
+			const float v = 1e-4f;            
+			glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
+			RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
+			
+			if(intersection.triangleIndex != SIZE_MAX){
+				glm::vec3 point = intersection.intersectionPoint;
+    			const ModelTriangle& tri = intersection.intersectedTriangle;
+				
+				glm::vec3 edge0 = tri.vertices[1] - tri.vertices[0];
+				glm::vec3 edge1 = tri.vertices[2] - tri.vertices[0];
+				glm::vec3 toPoint = point - tri.vertices[0];
+				
+				float dot00 = glm::dot(edge0, edge0);
+				float dot01 = glm::dot(edge0, edge1);
+				float dot11 = glm::dot(edge1, edge1);
+				float dot20 = glm::dot(toPoint, edge0);
+				float dot21 = glm::dot(toPoint, edge1);
+				float denominator = dot00 * dot11 - dot01 * dot01;
+				
+				float bary_v = (dot11 * dot20 - dot01 * dot21) / denominator;
+				float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
+				float bary_u = 1.0f - bary_v - bary_w;
+				
+				// 使用重心坐标插值顶点法线
+				glm::vec3 interpolatedNormal;
+
+				const std::array<glm::vec3, 3>& vertexNormals = vertexNormalsMap[intersection.triangleIndex];
+				interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
+				
+				float proximity = calculateProximity(point, lightPosition);
+				float angle = calculateAngleOfIncidence(point, interpolatedNormal, lightPosition);
+				float diffuse = proximity * angle;
+				float specular = calculateSpecular(point, interpolatedNormal, lightPosition, cameraPosition);
+				
+				bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
+				
+				float Brightness;
+				if (IsShadow){
+					Brightness = ambientLight;
+				} else {
+					Brightness = ambientLight + diffuse + specular;
+					Brightness = std::min(1.0f, Brightness);
+				}
+				
+				bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
+				Colour colourValue = tri.colour;
+				
+				if (hasTexture && texture != nullptr) {
+					// 用重心坐标插值纹理坐标
+					glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
+					glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
+					glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
+					glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
+					
+					// 从纹理采样
+					int texX = round(textureCoord.x * texture->width);
+					int texY = round(textureCoord.y * texture->height);
+					texX = std::max(0, std::min((int)texture->width - 1, texX));
+					texY = std::max(0, std::min((int)texture->height - 1, texY));
+					uint32_t textureColour = texture->pixels[texY * texture->width + texX];
+
+					colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
+				}
+				
+				uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
+				window.setPixelColour(x, y, colour);
+			}
+		}
+	}
+}
 
 void handleEvent(SDL_Event event, DrawingWindow &window){
 	float rotation = glm::radians(5.0f);      // 每次转
@@ -641,21 +668,31 @@ int main(int argc, char *argv[]){
 
     TextureMap texture("texture.ppm");
 
-    // Logo 已注释
+    // Logo
     // std::map<std::string, Colour> paletteLogo = loadMTL("hackspace-logo/materials.mtl");
     // std::vector<ModelTriangle> trianglesLogo = loadOBJ("hackspace-logo/logo.obj", paletteLogo, 0.0035f);
 
     // 添加红色球体
     std::map<std::string, Colour> paletteSphere = loadMTL("src/sphere.mtl");
-    std::vector<ModelTriangle> trianglesSphere = loadOBJ("src/sphere.obj", paletteSphere, 0.35f);
+    std::vector<ModelTriangle> trianglesSphere = loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
 	
 	// add fixed translation to sphere -- z 负数是往后，正数是往前（靠近相机）
-	glm::vec3 offset(0.0f, -1.0f, -1.0f);
+	glm::vec3 offset(-0.0f, -1.0f, -0.9f);
 	for (auto& tri : trianglesSphere) {
     tri.vertices[0] += offset;
     tri.vertices[1] += offset;
     tri.vertices[2] += offset;
 	}
+	
+	// 合并所有三角形用于光线追踪
+	std::vector<ModelTriangle> allTriangles;
+	allTriangles.insert(allTriangles.end(), trianglesTexturedBox.begin(), trianglesTexturedBox.end());
+	size_t sphereStartIndex = allTriangles.size();  // sphere 在合并向量中的起始索引
+	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
+	
+	// 计算所有模型的顶点法线用于 Gouraud Shading
+	computeVertexNormals(trianglesTexturedBox, 0);
+	computeVertexNormals(trianglesSphere, sphereStartIndex);
 
 	while (true){
 
@@ -685,8 +722,7 @@ int main(int argc, char *argv[]){
 			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
-            // drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, &texture);
-			drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, nullptr);
+			drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, allTriangles, &texture);
             break;
     	}
 		window.renderFrame();
