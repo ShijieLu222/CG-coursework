@@ -26,7 +26,8 @@ const glm::vec3 sceneCenter = {0.0f, 0.0f, 0.0f};
 
 glm::mat3 cameraOrientation(1.0f);   // 单位矩阵，表示"朝向不转"
 
-glm::vec3 lightPosition(0.0f, 0.9f, 0.0f);
+glm::vec3 lightPosition(0.0f, 0.9f, 0.1f);
+const float ambientLight = 0.2f;
 
 glm::mat3 rotX(float a) {
     float c = std::cos(a), s = std::sin(a);
@@ -45,6 +46,7 @@ glm::mat3 rotY(float a) {
 std::vector<ModelTriangle> loadOBJ(const std::string& filePath,const std::map<std::string,Colour>& palette,float scale){
     std::string line; //store the line
     std::vector<glm::vec3> vertices;
+    std::vector<glm::vec2> textureCoords;
     std::vector<ModelTriangle> triangles;
     std::ifstream inputFile(filePath); //read file
     std::string colourName;
@@ -65,17 +67,48 @@ std::vector<ModelTriangle> loadOBJ(const std::string& filePath,const std::map<st
             float y = std::stof(tokens[2])*scale;
             float z = std::stof(tokens[3])*scale;
             vertices.push_back(glm::vec3(x, y, z));
-        }else if (tokens[0]=="usemtl")
+        }
+        else if (tokens[0] == "vt"){ // 纹理坐标
+            float u = std::stof(tokens[1]);
+            float v = std::stof(tokens[2]);
+            textureCoords.push_back(glm::vec2(u, v));
+        }
+        else if (tokens[0]=="usemtl")
         {
             colourName = tokens[1];
             colour = palette.at(colourName);
         }
         else if (tokens[0] == "f"){
-            glm::vec3 v0 = vertices[std::stoi(tokens[1])-1]; //String To Integer avoid /
-            glm::vec3 v1 = vertices[std::stoi(tokens[2])-1];
-            glm::vec3 v2 = vertices[std::stoi(tokens[3])-1];
-            triangles.push_back(ModelTriangle(v0, v1, v2, colour));
-         }
+            // 支持 "f v" 和 "f v/vt" 格式
+            std::vector<std::string> v0Parts = split(tokens[1], '/');
+            std::vector<std::string> v1Parts = split(tokens[2], '/');
+            std::vector<std::string> v2Parts = split(tokens[3], '/');
+            
+            // 获取顶点坐标
+            glm::vec3 v0 = vertices[std::stoi(v0Parts[0])-1];
+            glm::vec3 v1 = vertices[std::stoi(v1Parts[0])-1];
+            glm::vec3 v2 = vertices[std::stoi(v2Parts[0])-1];
+
+			glm::vec3 edge0 = v1 - v0;
+			glm::vec3 edge1 = v2 - v0;
+			glm::vec3 normal = glm::normalize(glm::cross(edge0, edge1));
+
+			ModelTriangle triangle(v0, v1, v2, colour);
+			triangle.normal = normal;
+			
+			// 如果有纹理坐标，添加到三角形
+			if (v0Parts.size() > 1 && !v0Parts[1].empty() && !textureCoords.empty()) {
+			    int t0Index = std::stoi(v0Parts[1]) - 1;
+			    int t1Index = std::stoi(v1Parts[1]) - 1;
+			    int t2Index = std::stoi(v2Parts[1]) - 1;
+			    
+			    triangle.texturePoints[0] = TexturePoint(textureCoords[t0Index].x, textureCoords[t0Index].y);
+			    triangle.texturePoints[1] = TexturePoint(textureCoords[t1Index].x, textureCoords[t1Index].y);
+			    triangle.texturePoints[2] = TexturePoint(textureCoords[t2Index].x, textureCoords[t2Index].y);
+			}
+			
+			triangles.push_back(triangle);
+        }
         
     }
     inputFile.close();
@@ -117,7 +150,7 @@ std::map<std::string,Colour> loadMTL(const std::string& filePath){
     return palette;
 }
 
-CanvasPoint projectVertexOntoCanvasPoint(const glm::vec3 &cameraPosition,float focalLength, glm::vec3 &vertexPosition,const glm::mat3 &cameraOrientation){
+CanvasPoint projectVertexOntoCanvasPoint(const glm::vec3 &cameraPosition,float focalLength, const glm::vec3 &vertexPosition,const glm::mat3 &cameraOrientation){
     glm::vec3 vertexRelativeToCamera = vertexPosition - cameraPosition;
     float scale = 160.0f;
 
@@ -132,12 +165,6 @@ CanvasPoint projectVertexOntoCanvasPoint(const glm::vec3 &cameraPosition,float f
     
 
     return CanvasPoint(u,v,depth);
-}
-
-glm::vec3 getNormalVector(const ModelTriangle& tri){
-    glm::vec3 e0 = tri.vertices[1] - tri.vertices[0];
-    glm::vec3 e1 = tri.vertices[2] - tri.vertices[0];
-    return glm::normalize(glm::cross(e0, e1));
 }
 
 RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles){ //lab6
@@ -246,7 +273,7 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	return extraP;
 }
 
-void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2){ // 平顶三角形
+void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // 平顶三角形
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
@@ -284,7 +311,16 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
 					if (pixelDepth > depths[y][x]) {
-						window.setPixelColour(x, y, colourValue);
+						if (texture != nullptr) {
+							glm::vec2 t0(v0.texturePoint.x, v0.texturePoint.y);
+							glm::vec2 t1(v1.texturePoint.x, v1.texturePoint.y);
+							glm::vec2 t2(v2.texturePoint.x, v2.texturePoint.y);
+							glm::vec2 texturePoint = baryCentric.z * t0 + baryCentric.x * t1 + baryCentric.y * t2;
+							uint32_t textureColour = texture->pixels[round(texturePoint.y * texture->height) * texture->width + round(texturePoint.x * texture->width)];
+							window.setPixelColour(x, y, textureColour);
+						} else {
+							window.setPixelColour(x, y, colourValue);
+						}
 						depths[y][x] = pixelDepth;
 					}
 				}
@@ -293,7 +329,7 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	}
 }
 
-void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2){ // 顶角三角形
+void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // 顶角三角形
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
@@ -330,7 +366,16 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
 					if (pixelDepth > depths[y][x]) {
-						window.setPixelColour(x, y, colourValue);
+						if (texture != nullptr) {
+							glm::vec2 t0(v0.texturePoint.x, v0.texturePoint.y);
+							glm::vec2 t1(v1.texturePoint.x, v1.texturePoint.y);
+							glm::vec2 t2(v2.texturePoint.x, v2.texturePoint.y);
+							glm::vec2 texturePoint = baryCentric.z * t0 + baryCentric.x * t1 + baryCentric.y * t2;
+							uint32_t texColour = texture->pixels[round(texturePoint.y * texture->height) * texture->width + round(texturePoint.x * texture->width)];
+							window.setPixelColour(x, y, texColour);
+						} else {
+							window.setPixelColour(x, y, colourValue);
+						}
 						depths[y][x] = pixelDepth;
 					}
 				}
@@ -339,16 +384,16 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 	}
 }
 
-void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, const Colour &colour, std::vector<std::vector<float>> &depths){ // Rasteriser
+void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, const Colour &colour, std::vector<std::vector<float>> &depths, const TextureMap *texture = nullptr){ // Rasteriser
 	std::vector<CanvasPoint> sortedPs = sortByY(triangle);
 	CanvasPoint extraP = FindExtraP(sortedPs);
 	CanvasPoint top = sortedPs[0];
 	CanvasPoint mid = sortedPs[1];
 	CanvasPoint bottom = sortedPs[2];
 	
-	// 传入原始三角形顶点用于重心坐标计算
-	fillFlatTopTriangle(window, bottom, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
-	fillFlatBottomTriangle(window, top, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
+	// 传入原始三角形顶点用于重心坐标计算，并传递纹理指针
+	fillFlatTopTriangle(window, bottom, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2], texture);
+	fillFlatBottomTriangle(window, top, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2], texture);
 
 }
 
@@ -390,24 +435,99 @@ bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& tri
     return (intersection.distanceFromCamera < distToLight);                                     // 只接受光源之前的命中
 }
 
-void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles){
+float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
+	float distanceToLight = glm::length(lightPosition - target);
+	float proximity = 10.0f / (4.0f * M_PI *distanceToLight * distanceToLight);
+	return std::min(1.0f,proximity) ;
+}
+
+float calculateAngleOfIncidence(const glm::vec3& intersectionPoint, const ModelTriangle& triangle, const glm::vec3& lightPosition){
+	glm::vec3 normal  = glm::normalize(triangle.normal);
+    glm::vec3 toLight = glm::normalize(lightPosition - intersectionPoint);
+    float angle = glm::dot(normal, toLight);
+	return std::max(0.0f, angle);
+}
+
+float calculateSpecular(const glm::vec3& intersectionPoint,const ModelTriangle& triangle,const glm::vec3& lightPosition,const glm::vec3& cameraPosition) {
+
+	glm::vec3 N = glm::normalize(triangle.normal);
+	glm::vec3 L = glm::normalize(lightPosition - intersectionPoint); 
+	glm::vec3 V = glm::normalize(cameraPosition - intersectionPoint); 
+	glm::vec3 R = 2.0f * glm::dot(N, L) * N - L;
+
+	float specular = glm::dot(R, V); 
+	return std::pow(std::max(0.0f, specular), 256);
+}
+
+void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
 	for(int y = 0; y< HEIGHT;y++){
 		for(int x =0; x<WIDTH; x++ ){
 			glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
 			const float v = 1e-4f;            
 			glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
 			RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
-			if(!(intersection.triangleIndex == SIZE_MAX)){
-
+			
+			if(intersection.triangleIndex != SIZE_MAX){
 				glm::vec3 point = intersection.intersectionPoint;
     			const ModelTriangle& tri = intersection.intersectedTriangle;
-				bool IsShadow = isInShadow(point,intersection.triangleIndex, triangles);
+				
+				float proximity = calculateProximity(point, lightPosition);
+				float angle = calculateAngleOfIncidence(point, tri, lightPosition);
+				float diffuse = proximity * angle;
+				float specular = calculateSpecular(point, tri, lightPosition, cameraPosition);
+				bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
+				
+				float Brightness;
 				if (IsShadow){
-					window.setPixelColour(x, y, 0xFF000000u);
-				}else{
-					uint32_t colourValue = (255u << 24) + (uint32_t(intersection.intersectedTriangle.colour.red) << 16) + (uint32_t(intersection.intersectedTriangle.colour.green) << 8) + (uint32_t(intersection.intersectedTriangle.colour.blue));
-					window.setPixelColour(x, y, colourValue);
+					Brightness = ambientLight;
+				} else {
+					Brightness = ambientLight + diffuse + specular;
+					Brightness = std::min(1.0f, Brightness);
 				}
+				
+				bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||
+				                   tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||
+				                   tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
+				
+				Colour colourValue = tri.colour;
+				
+				// 如果有纹理，从纹理采样
+				if (hasTexture && texture != nullptr) {
+					glm::vec3 e0 = tri.vertices[1] - tri.vertices[0];
+					glm::vec3 e1 = tri.vertices[2] - tri.vertices[0];
+					glm::vec3 toPoint = point - tri.vertices[0];
+					
+					// 使用点乘计算重心坐标
+					float dot00 = glm::dot(e0, e0);
+					float dot01 = glm::dot(e0, e1);
+					float dot11 = glm::dot(e1, e1);
+					float dot20 = glm::dot(toPoint, e0);
+					float dot21 = glm::dot(toPoint, e1);
+					float denominator = dot00 * dot11 - dot01 * dot01;
+					
+					float v = (dot11 * dot20 - dot01 * dot21) / denominator;
+					float w = (dot00 * dot21 - dot01 * dot20) / denominator;
+					float u = 1.0f - v - w;
+					
+					// 用重心坐标插值纹理坐标
+					glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
+					glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
+					glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
+					glm::vec2 textureCoord = u * t0 + v * t1 + w * t2;
+					
+					// 从纹理采样
+					int texX = round(textureCoord.x * texture->width);
+					int texY = round(textureCoord.y * texture->height);
+					texX = std::max(0, std::min((int)texture->width - 1, texX));
+					texY = std::max(0, std::min((int)texture->height - 1, texY));
+					
+					uint32_t textureColour = texture->pixels[texY * texture->width + texX];
+					
+					colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
+				}
+				
+				uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
+				window.setPixelColour(x, y, colour);
 			}
 		}
 	}
@@ -430,9 +550,9 @@ void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, 
     }
 }
 
-void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths) {
+void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths, const TextureMap *texture = nullptr) {
 	const float minValidDepth = 0.0f;
-	for (ModelTriangle triangle : triangles){
+	for (const ModelTriangle& triangle : triangles){
 			CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
 			CanvasPoint projectedPoint1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
 			CanvasPoint projectedPoint2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
@@ -442,8 +562,22 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 				continue;
 			}
 			
+			// 传递纹理坐标到 CanvasPoint
+			projectedPoint0.texturePoint = triangle.texturePoints[0];
+			projectedPoint1.texturePoint = triangle.texturePoints[1];
+			projectedPoint2.texturePoint = triangle.texturePoints[2];
+			
 			CanvasTriangle canvasTriangle(projectedPoint0,projectedPoint1,projectedPoint2);
-			drawFilledTriangle(window,canvasTriangle,triangle.colour,depths);
+			
+			bool hasTexture = (triangle.texturePoints[0].x != 0 || triangle.texturePoints[0].y != 0 ||
+			                   triangle.texturePoints[1].x != 0 || triangle.texturePoints[1].y != 0 ||
+			                   triangle.texturePoints[2].x != 0 || triangle.texturePoints[2].y != 0);
+			
+			if (hasTexture) {
+				drawFilledTriangle(window, canvasTriangle, triangle.colour, depths, texture);
+			} else {
+				drawFilledTriangle(window, canvasTriangle, triangle.colour, depths, nullptr);
+			}
 	}
 }
 
@@ -502,11 +636,26 @@ int main(int argc, char *argv[]){
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 
-	std::map<std::string, Colour> paletteCornellBox = loadMTL("cornell-box.mtl");
-    std::vector<ModelTriangle> trianglesCornellBox = loadOBJ("cornell-box.obj", paletteCornellBox, 0.35f);
+	std::map<std::string, Colour> paletteTexturedBox = loadMTL("src/textured-cornell-box.mtl");
+    std::vector<ModelTriangle> trianglesTexturedBox = loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
 
-    std::map<std::string, Colour> paletteLogo = loadMTL("hackspace-logo/materials.mtl");
-    std::vector<ModelTriangle> trianglesLogo = loadOBJ("hackspace-logo/logo.obj", paletteLogo, 0.0035f);
+    TextureMap texture("texture.ppm");
+
+    // Logo 已注释
+    // std::map<std::string, Colour> paletteLogo = loadMTL("hackspace-logo/materials.mtl");
+    // std::vector<ModelTriangle> trianglesLogo = loadOBJ("hackspace-logo/logo.obj", paletteLogo, 0.0035f);
+
+    // 添加红色球体
+    std::map<std::string, Colour> paletteSphere = loadMTL("src/sphere.mtl");
+    std::vector<ModelTriangle> trianglesSphere = loadOBJ("src/sphere.obj", paletteSphere, 0.35f);
+	
+	// add fixed translation to sphere -- z 负数是往后，正数是往前（靠近相机）
+	glm::vec3 offset(0.0f, -1.0f, -1.0f);
+	for (auto& tri : trianglesSphere) {
+    tri.vertices[0] += offset;
+    tri.vertices[1] += offset;
+    tri.vertices[2] += offset;
+	}
 
 	while (true){
 
@@ -525,15 +674,19 @@ int main(int argc, char *argv[]){
 	
 	switch (Mode) {
         case RenderMode::Wireframe:
-            drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox, depths);
-			drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
+            drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, depths);
+			// drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
+			drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, depths);
             break;
         case RenderMode::Rasterised:
-            drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox, depths);
-			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
+            // 传递纹理给 texturedBox，自动判断每个三角形是否有纹理
+            drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, depths, &texture);
+			// drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths, nullptr);
+			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
-            drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesCornellBox);
+            // drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, &texture);
+			drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, nullptr);
             break;
     	}
 		window.renderFrame();

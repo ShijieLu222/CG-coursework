@@ -343,8 +343,7 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 
 // lab -3 TASK 5
 
-void fillFlatTopTexturedTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, const TextureMap &Texture)
-{
+void fillFlatTopTexturedTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, const TextureMap &Texture){
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
