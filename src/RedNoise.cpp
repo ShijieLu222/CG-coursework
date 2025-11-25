@@ -13,6 +13,9 @@
 #include <map>
 #include <string>
 #include <limits>
+#include <thread>
+#include <chrono>
+#include <iomanip>
 #define WIDTH  640
 #define HEIGHT 480
 
@@ -45,7 +48,7 @@ Camera camera = {
 
 Light light = {
     glm::vec3(0.0f, 0.9f, 0.1f),  // position
-    0.2f                           // ambient
+    0.15f                           // ambient
 };
 
 Scene scene = {
@@ -460,7 +463,7 @@ glm::vec3 pixelToRayDirection(int x, int y,int width, int height, float focalLen
 
 RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles){ //lab6
     glm::vec3 direction = glm::normalize(rayDirection); //单位化
-    float bestT = std::numeric_limits<float>::infinity(); // 当前最优（最小）t，初始为 +∞
+    float bestT = std::numeric_limits<float>::max(); // 当前最优（最小）t，初始为最大值
     RayTriangleIntersection bestIntercetion;
     bestIntercetion.triangleIndex =SIZE_MAX; //if not intercepted
 
@@ -560,75 +563,100 @@ void computeVertexNormals(const std::vector<ModelTriangle>& triangles, int start
 }
 
 void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
-	for(int y = 0; y< HEIGHT;y++){
-		for(int x =0; x<WIDTH; x++ ){
-			glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
-			const float v = 1e-4f;            
-			glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
-			RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
-			
-			if(intersection.triangleIndex != SIZE_MAX){
-				glm::vec3 point = intersection.intersectionPoint;
-    			const ModelTriangle& tri = intersection.intersectedTriangle;
+	// Detect number of CPU cores
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 4; // Fallback to 4 threads if detection fails
+	
+	// Calculate rows per thread
+	int rowsPerThread = HEIGHT / numThreads;
+	
+	// Vector to store thread handles
+	std::vector<std::thread> threads;
+	
+	// Lambda function to process a range of rows
+	auto renderRows = [&](int startY, int endY) {
+		for(int y = startY; y < endY; y++){
+			for(int x = 0; x < WIDTH; x++){
+				glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
+				const float v = 1e-4f;            
+				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
+				RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
 				
-				glm::vec3 edge0 = tri.vertices[1] - tri.vertices[0];
-				glm::vec3 edge1 = tri.vertices[2] - tri.vertices[0];
-				glm::vec3 toPoint = point - tri.vertices[0];
-				
-				float dot00 = glm::dot(edge0, edge0);
-				float dot01 = glm::dot(edge0, edge1);
-				float dot11 = glm::dot(edge1, edge1);
-				float dot20 = glm::dot(toPoint, edge0);
-				float dot21 = glm::dot(toPoint, edge1);
-				float denominator = dot00 * dot11 - dot01 * dot01;
-				
-				float bary_v = (dot11 * dot20 - dot01 * dot21) / denominator;
-				float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
-				float bary_u = 1.0f - bary_v - bary_w;
-				
-				// 用重心坐标插值顶点法线
-				std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
-				glm::vec3 interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
-				
-				float proximity = calculateProximity(point, light.position);
-				float angle = calculateAngleOfIncidence(point, interpolatedNormal, light.position);
-				float diffuse = proximity * angle;
-				float specular = calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
-				
-				bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
-				
-				float Brightness;
-				if (IsShadow){
-					Brightness = light.ambient;
-				} else {
-					Brightness = light.ambient + diffuse + specular;
-					Brightness = std::min(1.0f, Brightness);
-				}
-				
-				bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
-				Colour colourValue = tri.colour;
-				
-				if (hasTexture && texture != nullptr) {
-					// 用重心坐标插值纹理坐标
-					glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
-					glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
-					glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
-					glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
+				if(intersection.triangleIndex != SIZE_MAX){
+					glm::vec3 point = intersection.intersectionPoint;
+					const ModelTriangle& tri = intersection.intersectedTriangle;
 					
-					// 从纹理采样
-					int texX = round(textureCoord.x * texture->width);
-					int texY = round(textureCoord.y * texture->height);
-					texX = std::max(0, std::min((int)texture->width - 1, texX));
-					texY = std::max(0, std::min((int)texture->height - 1, texY));
-					uint32_t textureColour = texture->pixels[texY * texture->width + texX];
+					glm::vec3 edge0 = tri.vertices[1] - tri.vertices[0];
+					glm::vec3 edge1 = tri.vertices[2] - tri.vertices[0];
+					glm::vec3 toPoint = point - tri.vertices[0];
+					
+					float dot00 = glm::dot(edge0, edge0);
+					float dot01 = glm::dot(edge0, edge1);
+					float dot11 = glm::dot(edge1, edge1);
+					float dot20 = glm::dot(toPoint, edge0);
+					float dot21 = glm::dot(toPoint, edge1);
+					float denominator = dot00 * dot11 - dot01 * dot01;
+					
+					float bary_v = (dot11 * dot20 - dot01 * dot21) / denominator;
+					float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
+					float bary_u = 1.0f - bary_v - bary_w;
+					
+					// 用重心坐标插值顶点法线
+					std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
+					glm::vec3 interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
+					
+					float proximity = calculateProximity(point, light.position);
+					float angle = calculateAngleOfIncidence(point, interpolatedNormal, light.position);
+					float diffuse = proximity * angle;
+					float specular = calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
+					
+					bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
+					
+					float Brightness;
+					if (IsShadow){
+						Brightness = light.ambient;
+					} else {
+						Brightness = light.ambient + diffuse + specular;
+						Brightness = std::min(1.0f, Brightness);
+					}
+					
+					bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
+					Colour colourValue = tri.colour;
+					
+					if (hasTexture && texture != nullptr) {
+						// 用重心坐标插值纹理坐标
+						glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
+						glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
+						glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
+						glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
+						
+						// 从纹理采样
+						int texX = round(textureCoord.x * texture->width);
+						int texY = round(textureCoord.y * texture->height);
+						texX = std::max(0, std::min((int)texture->width - 1, texX));
+						texY = std::max(0, std::min((int)texture->height - 1, texY));
+						uint32_t textureColour = texture->pixels[texY * texture->width + texX];
 
-					colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
+						colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
+					}
+					
+					uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
+					window.setPixelColour(x, y, colour);
 				}
-				
-				uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
-				window.setPixelColour(x, y, colour);
 			}
 		}
+	};
+	
+	// Spawn threads
+	for (unsigned int i = 0; i < numThreads; i++) {
+		int startY = i * rowsPerThread;
+		int endY = (i == numThreads - 1) ? HEIGHT : (i + 1) * rowsPerThread;
+		threads.emplace_back(renderRows, startY, endY);
+	}
+	
+	// Join all threads
+	for (auto& thread : threads) {
+		thread.join();
 	}
 }
 
@@ -717,8 +745,11 @@ int main(int argc, char *argv[]){
 	computeVertexNormals(trianglesTexturedBox, 0);
 	computeVertexNormals(trianglesSphere, sphereStartIndex);
 
-	while (true){
+	// FPS计数
+	int fps = 0;
+	auto lastTime = std::chrono::high_resolution_clock::now();
 
+	while (true){
 		if (window.pollForInputEvents(event))
 			handleEvent(event, window);
 
@@ -750,9 +781,21 @@ int main(int argc, char *argv[]){
     	}
 		window.renderFrame();
 
-		static int frame = 0; char name[128];
-        sprintf(name, "frames/frame_%04d.bmp", frame++);
-        window.saveBMP(name);
+		// FPS计数
+		fps++;
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> elapsed = currentTime - lastTime;
+		
+		// 每秒打印一次FPS
+		if (elapsed.count() >= 1.0) {
+			std::cout << "FPS: " << fps << std::endl;
+			fps = 0;
+			lastTime = currentTime;
+		}
+
+		// static int frame = 0; char name[128];
+        // sprintf(name, "frames/frame_%04d.bmp", frame++);
+        // window.saveBMP(name);
 	}
 	return 0;
 }
