@@ -17,19 +17,44 @@
 #define HEIGHT 480
 
 enum class RenderMode { Wireframe = 1, Rasterised = 2, RayTraced = 3 };
-RenderMode Mode = RenderMode::Rasterised;
 
-bool autoRotation = false;
-glm::vec3 cameraPosition(0.0f, 0.0f, 4.0f);
-float focalLength = 2.0f;
-const glm::vec3 sceneCenter = {0.0f, 0.0f, 0.0f};
+struct Camera {
+    glm::vec3 position;
+    glm::mat3 orientation;
+    float focalLength;
+    bool autoRotate;
+};
 
-glm::mat3 cameraOrientation(1.0f);   // 单位矩阵，表示"朝向不转"
+struct Light {
+    glm::vec3 position;
+    float ambient;
+};
 
-glm::vec3 lightPosition(0.0f, 0.9f, 0.1f);
-const float ambientLight = 0.2f;
+struct Scene {
+    RenderMode mode;
+    glm::vec3 center;
+};
 
-std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;// Gouraud Shading: 存储每个三角形的顶点法线 [triangleIndex][vertexIndex]
+// 全局变量
+Camera camera = {
+    glm::vec3(0.0f, 0.0f, 4.0f),    // position
+    glm::mat3(1.0f),                // orientation
+    2.0f,                           // focalLength
+    false                           // autoRotate
+};
+
+Light light = {
+    glm::vec3(0.0f, 0.9f, 0.1f),  // position
+    0.2f                           // ambient
+};
+
+Scene scene = {
+    RenderMode::Rasterised,        // mode
+    glm::vec3(0.0f, 0.0f, 0.0f)   // center
+};
+
+// 存储顶点法线
+std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;
 
 glm::mat3 rotX(float a) {
     float c = std::cos(a), s = std::sin(a);
@@ -469,20 +494,20 @@ RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosit
     return bestIntercetion;
 }
 
-bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& triangles){ //一个点在不在阴影里面（检测像素到相机碰撞的）
-    glm::vec3 toLight = lightPosition - point;//从 p 往光源发射阴影光线
+bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& triangles){
+    glm::vec3 toLight = light.position - point;
     glm::vec3 direction = glm::normalize(toLight);
 	float distToLight = glm::length(toLight);
-    if (distToLight <= 0.0f) return false; // 极端：光源与点重合
+    if (distToLight <= 0.0f) return false;
 
 	const float v = 1e-4f;
     glm::vec3 RayOrigin = point + direction * v; 
 
     RayTriangleIntersection intersection = getClosestValidIntersection(RayOrigin,direction,triangles);
 
-    if (intersection.triangleIndex == SIZE_MAX) return false;                                   // 没命中 → 不遮
-    if (intersection.triangleIndex == index && intersection.distanceFromCamera < 1e-4f) return false; // 撞回自己
-    return (intersection.distanceFromCamera < distToLight);                                     // 只接受光源之前的命中
+    if (intersection.triangleIndex == SIZE_MAX) return false;
+    if (intersection.triangleIndex == index && intersection.distanceFromCamera < 1e-4f) return false;
+    return (intersection.distanceFromCamera < distToLight);
 }
 
 float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
@@ -561,24 +586,22 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 				float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
 				float bary_u = 1.0f - bary_v - bary_w;
 				
-				// 使用重心坐标插值顶点法线
-				glm::vec3 interpolatedNormal;
-
-				const std::array<glm::vec3, 3>& vertexNormals = vertexNormalsMap[intersection.triangleIndex];
-				interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
+				// 用重心坐标插值顶点法线
+				std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
+				glm::vec3 interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
 				
-				float proximity = calculateProximity(point, lightPosition);
-				float angle = calculateAngleOfIncidence(point, interpolatedNormal, lightPosition);
+				float proximity = calculateProximity(point, light.position);
+				float angle = calculateAngleOfIncidence(point, interpolatedNormal, light.position);
 				float diffuse = proximity * angle;
-				float specular = calculateSpecular(point, interpolatedNormal, lightPosition, cameraPosition);
+				float specular = calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
 				
 				bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
 				
 				float Brightness;
 				if (IsShadow){
-					Brightness = ambientLight;
+					Brightness = light.ambient;
 				} else {
-					Brightness = ambientLight + diffuse + specular;
+					Brightness = light.ambient + diffuse + specular;
 					Brightness = std::min(1.0f, Brightness);
 				}
 				
@@ -617,39 +640,39 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 	if (event.type == SDL_KEYDOWN){
 		if (event.key.keysym.sym == SDLK_LEFT){
 			std::cout << "LEFT" << std::endl;
-			cameraPosition = sceneCenter + rotY(rotation)*(cameraPosition-sceneCenter); // 绕任意点sceneCenter 旋转的标准公式：p' = scenceCenter + R * (p - scenceCenter)
-			cameraOrientation = lookAt(cameraPosition, sceneCenter);
+			camera.position = scene.center + rotY(rotation)*(camera.position-scene.center);
+			camera.orientation = lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_RIGHT){
 			std::cout << "RIGHT" << std::endl;
-			cameraPosition = sceneCenter + rotY(-rotation)*(cameraPosition-sceneCenter);
-			cameraOrientation = lookAt(cameraPosition, sceneCenter);
+			camera.position = scene.center + rotY(-rotation)*(camera.position-scene.center);
+			camera.orientation = lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_UP){
 			std::cout << "UP" << std::endl;
-			cameraPosition = sceneCenter + rotX(rotation)*(cameraPosition-sceneCenter);
-			cameraOrientation = lookAt(cameraPosition, sceneCenter);
+			camera.position = scene.center + rotX(rotation)*(camera.position-scene.center);
+			camera.orientation = lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_DOWN){
 			std::cout << "DOWN" << std::endl;
-			cameraPosition = sceneCenter + rotX(-rotation)*(cameraPosition-sceneCenter);
-			cameraOrientation = lookAt(cameraPosition, sceneCenter);
+			camera.position = scene.center + rotX(-rotation)*(camera.position-scene.center);
+			camera.orientation = lookAt(camera.position, scene.center);
 		}
 		switch (event.key.keysym.sym){
-		case SDLK_1:Mode = RenderMode::Wireframe;break;
-        case SDLK_2:Mode = RenderMode::Rasterised;break;
-        case SDLK_3:Mode = RenderMode::RayTraced;break;
+		case SDLK_1:scene.mode = RenderMode::Wireframe;break;
+        case SDLK_2:scene.mode = RenderMode::Rasterised;break;
+        case SDLK_3:scene.mode = RenderMode::RayTraced;break;
 
-		case SDLK_a: cameraPosition.x = cameraPosition.x - translation;break;
-		case SDLK_d: cameraPosition.x = cameraPosition.x + translation;break;
-		case SDLK_w: cameraPosition.y = cameraPosition.y + translation;break;
-		case SDLK_s: cameraPosition.y = cameraPosition.y - translation;break;
-		case SDLK_q: cameraPosition.z = cameraPosition.z - translation;break;
-		case SDLK_e: cameraPosition.z = cameraPosition.z + translation;break;
+		case SDLK_a: camera.position.x = camera.position.x - translation;break;
+		case SDLK_d: camera.position.x = camera.position.x + translation;break;
+		case SDLK_w: camera.position.y = camera.position.y + translation;break;
+		case SDLK_s: camera.position.y = camera.position.y - translation;break;
+		case SDLK_q: camera.position.z = camera.position.z - translation;break;
+		case SDLK_e: camera.position.z = camera.position.z + translation;break;
 
-		case SDLK_j: cameraOrientation = cameraOrientation * rotY(+orientation); break; // j:pan 左
-		case SDLK_k: cameraOrientation = cameraOrientation * rotY(-orientation); break; // k:pan 右
-		case SDLK_i: cameraOrientation = cameraOrientation * rotX(+orientation); break; // i:tilt 上
-		case SDLK_o: cameraOrientation = cameraOrientation * rotX(-orientation); break; // o:tilt 下
+		case SDLK_j: camera.orientation = camera.orientation * rotY(+orientation); break; // j:pan 
+		case SDLK_k: camera.orientation = camera.orientation * rotY(-orientation); break; // k:pan 
+		case SDLK_i: camera.orientation = camera.orientation * rotX(+orientation); break; // i:tilt 
+		case SDLK_o: camera.orientation = camera.orientation * rotX(-orientation); break; // o:tilt
 
-		case SDLK_r: autoRotation = !autoRotation; break;
+		case SDLK_r: camera.autoRotate = !camera.autoRotate; break;
 		}
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN)
@@ -677,7 +700,7 @@ int main(int argc, char *argv[]){
     std::vector<ModelTriangle> trianglesSphere = loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
 	
 	// add fixed translation to sphere -- z 负数是往后，正数是往前（靠近相机）
-	glm::vec3 offset(-0.0f, -1.0f, -0.9f);
+	glm::vec3 offset(0.4f, -1.1f, -0.9f);
 	for (auto& tri : trianglesSphere) {
     tri.vertices[0] += offset;
     tri.vertices[1] += offset;
@@ -687,7 +710,7 @@ int main(int argc, char *argv[]){
 	// 合并所有三角形用于光线追踪
 	std::vector<ModelTriangle> allTriangles;
 	allTriangles.insert(allTriangles.end(), trianglesTexturedBox.begin(), trianglesTexturedBox.end());
-	size_t sphereStartIndex = allTriangles.size();  // sphere 在合并向量中的起始索引
+	int sphereStartIndex = (int)allTriangles.size();  // sphere 在合并向量中的起始索引
 	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
 	
 	// 计算所有模型的顶点法线用于 Gouraud Shading
@@ -699,9 +722,9 @@ int main(int argc, char *argv[]){
 		if (window.pollForInputEvents(event))
 			handleEvent(event, window);
 
-		if (autoRotation) {
-        	cameraPosition = sceneCenter + rotY(glm::radians(0.5f)) * (cameraPosition - sceneCenter);
-        	cameraOrientation = lookAt(cameraPosition, sceneCenter);
+		if (camera.autoRotate) {
+        	camera.position = scene.center + rotY(glm::radians(0.5f)) * (camera.position - scene.center);
+        	camera.orientation = lookAt(camera.position, scene.center);
     	} 
 
 	window.clearPixels();
@@ -709,20 +732,20 @@ int main(int argc, char *argv[]){
 	// 为每一帧创建一次深度缓冲，所有物体共享
 	std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
 	
-	switch (Mode) {
+	switch (scene.mode) {
         case RenderMode::Wireframe:
-            drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, depths);
-			// drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths);
-			drawWireframeScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, depths);
+            drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths);
+			// drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesLogo, depths);
+			drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths);
             break;
         case RenderMode::Rasterised:
             // 传递纹理给 texturedBox，自动判断每个三角形是否有纹理
-            drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesTexturedBox, depths, &texture);
-			// drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesLogo, depths, nullptr);
-			drawRasterisedFilledScene(window, cameraPosition, cameraOrientation, focalLength, trianglesSphere, depths, nullptr);
+            drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths, &texture);
+			// drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesLogo, depths, nullptr);
+			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
-			drawRayTracedScene(window, cameraPosition, cameraOrientation, focalLength, allTriangles, &texture);
+			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture);
             break;
     	}
 		window.renderFrame();
