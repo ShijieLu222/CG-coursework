@@ -16,6 +16,7 @@
 #include <thread>
 #include <chrono>
 #include <iomanip>
+#include <random>
 #define WIDTH  640
 #define HEIGHT 480
 
@@ -47,7 +48,7 @@ Camera camera = {
 };
 
 Light light = {
-    glm::vec3(0.0f, 0.9f, 0.1f),  // position
+    glm::vec3(0.0f, 0.8f, 0.1f),  // position
     0.15f                           // ambient
 };
 
@@ -461,13 +462,15 @@ glm::vec3 pixelToRayDirection(int x, int y,int width, int height, float focalLen
 	return RayDirection;
 }
 
-RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles){ //lab6
+RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles, size_t ignoreIndex = SIZE_MAX){ //lab6
     glm::vec3 direction = glm::normalize(rayDirection); //单位化
     float bestT = std::numeric_limits<float>::max(); // 当前最优（最小）t，初始为最大值
     RayTriangleIntersection bestIntercetion;
     bestIntercetion.triangleIndex =SIZE_MAX; //if not intercepted
 
     for (int i = 0; i < triangles.size(); i++) {
+        // 修复：跳过被忽略的三角形（用于避免阴影自相交）
+        if (i == ignoreIndex) continue;
 
         const ModelTriangle triangle = triangles[i];
 
@@ -482,7 +485,7 @@ RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosit
         float v = possibleSolution.z; //交点在三角形第 2 条边方向上的比例
         float w =1-u-v;
 
-        if (!((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1 &&t >0)) continue;        // 必须做命中判定 task3
+        if (!((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1 && t > 0.001f)) continue;        // 必须做命中判定 task3
 
         if(t<bestT){
             bestT = t;
@@ -497,20 +500,38 @@ RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosit
     return bestIntercetion;
 }
 
-bool isInShadow(const glm::vec3& point,int index,std::vector<ModelTriangle>& triangles){
-    glm::vec3 toLight = light.position - point;
-    glm::vec3 direction = glm::normalize(toLight);
-	float distToLight = glm::length(toLight);
-    if (distToLight <= 0.0f) return false;
+float calculateSoftShadow(const glm::vec3& point, size_t selfIndex, std::vector<ModelTriangle>& triangles){
+    int numSamples = 8;        // 采样次数（减少以提升性能）
+    float lightRadius = 0.15f;  // 光源半径
+    int visibleSamples = 0;
 
-	const float v = 1e-4f;
-    glm::vec3 RayOrigin = point + direction * v; 
+    // 修复：使用线程安全的随机数生成器，解决多线程导致的噪点
+    static thread_local std::mt19937 generator(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    std::uniform_real_distribution<float> dist(-lightRadius, lightRadius);
 
-    RayTriangleIntersection intersection = getClosestValidIntersection(RayOrigin,direction,triangles);
+    for (int i = 0; i < numSamples; i++) {
+        // 生成随机偏移（立方体内采样，快速）
+        glm::vec3 randomOffset(dist(generator), dist(generator), dist(generator));
 
-    if (intersection.triangleIndex == SIZE_MAX) return false;
-    if (intersection.triangleIndex == index && intersection.distanceFromCamera < 1e-4f) return false;
-    return (intersection.distanceFromCamera < distToLight);
+        glm::vec3 currentLightPos = light.position + randomOffset;
+        glm::vec3 toLight = currentLightPos - point;
+        float distToLight = glm::length(toLight);
+        
+        if (distToLight <= 1e-6f) {
+            visibleSamples++;
+            continue;
+        }
+        
+        glm::vec3 lightDir = glm::normalize(toLight);
+        glm::vec3 rayOrigin = point + lightDir * 0.001f;   
+        RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin, lightDir, triangles, selfIndex);
+
+        // 检查光线是否被遮挡
+        if (intersection.triangleIndex == SIZE_MAX || intersection.distanceFromCamera > distToLight) {
+            visibleSamples++;
+        }
+    }
+    return (float)visibleSamples / (float)numSamples;
 }
 
 float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
@@ -610,15 +631,10 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 					float diffuse = proximity * angle;
 					float specular = calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
 					
-					bool IsShadow = isInShadow(point, intersection.triangleIndex, triangles);
+					float shadowFactor = calculateSoftShadow(point, intersection.triangleIndex, triangles);
 					
-					float Brightness;
-					if (IsShadow){
-						Brightness = light.ambient;
-					} else {
-						Brightness = light.ambient + diffuse + specular;
-						Brightness = std::min(1.0f, Brightness);
-					}
+					float Brightness = light.ambient + (diffuse + specular) * shadowFactor;
+					Brightness = std::min(1.0f, Brightness);
 					
 					bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
 					Colour colourValue = tri.colour;
