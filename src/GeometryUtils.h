@@ -17,5 +17,6 @@ namespace GeometryUtils {
     glm::vec3 pixelToRayDirection(int x, int y, int width, int height, float focalLength, const glm::mat3& cameraOrientation);
     RayTriangleIntersection getClosestValidIntersection(const glm::vec3& cameraPosition,const glm::vec3& rayDirection,std::vector<ModelTriangle>& triangles,size_t ignoreIndex = SIZE_MAX);
     void computeVertexNormals(const std::vector<ModelTriangle>& triangles, std::map<size_t, std::array<glm::vec3, 3>>& vertexNormalsMap,int startIndex = 0);
+    glm::vec3 calculateReflectedRay(const glm::vec3& incomingRay, const glm::vec3& normal);
 }
 

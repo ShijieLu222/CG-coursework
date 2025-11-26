@@ -55,6 +55,11 @@ std::vector<ModelTriangle> FileLoader::loadOBJ(const std::string& filePath, cons
             ModelTriangle triangle(v0, v1, v2, colour);
             triangle.normal = normal;
             
+            if (colourName == "Mirror") {
+                triangle.isMirror = true;
+                triangle.reflectivity = 0.95f;
+            }
+            
             if (v0Parts.size() > 1 && !v0Parts[1].empty() && !textureCoords.empty()) {
                 int t0Index = std::stoi(v0Parts[1]) - 1;
                 int t1Index = std::stoi(v1Parts[1]) - 1;

@@ -114,5 +114,15 @@ namespace GeometryUtils {
             vertexNormalsMap[startIndex + i] = vertexNormals;
         }
     }
+
+    glm::vec3 calculateReflectedRay(const glm::vec3& incomingRay, const glm::vec3& normal) {
+        // 反射公式: r = d - 2(d·n)n
+        // 其中 d 是入射光方向，n 是表面法向量
+        glm::vec3 normalizedIncoming = glm::normalize(incomingRay);
+        glm::vec3 normalizedNormal = glm::normalize(normal);
+        float dotProduct = glm::dot(normalizedIncoming, normalizedNormal);
+        glm::vec3 reflected = normalizedIncoming - 2.0f * dotProduct * normalizedNormal;
+        return glm::normalize(reflected);
+    }
 }
 

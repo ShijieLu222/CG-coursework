@@ -118,7 +118,7 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	float ratio = (sortedPs[1].y - sortedPs[0].y) / dy; // 用y的计算比例，y的变化占比例eg 0.25，从top到mid
 	// 屏幕坐标插值
 	extraP.x = sortedPs[0].x + ratio * (sortedPs[2].x - sortedPs[0].x); // 拿比例 * top到bottom的总值 + top起始点的x
-	// 纹理坐标也要插值！这是关键！
+	// 纹理坐标也要插值，这是关键！
 	extraP.texturePoint.x = sortedPs[0].texturePoint.x + ratio * (sortedPs[2].texturePoint.x - sortedPs[0].texturePoint.x);
 	extraP.texturePoint.y = sortedPs[0].texturePoint.y + ratio * (sortedPs[2].texturePoint.y - sortedPs[0].texturePoint.y);
 
@@ -298,11 +298,111 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 	}
 }
 
+Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::vector<ModelTriangle> &triangles, const TextureMap *texture, int sphereStartIndex, int sphereCount, int depth = 0) {
+	const int MAX_REFLECTION_DEPTH = 3;
+	const float EPSILON = 1e-4f;
+	
+	if (depth > MAX_REFLECTION_DEPTH) {
+		return Colour(0, 0, 0);
+	}
+	
+	RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin, rayDirection, triangles);
+	
+	if (intersection.triangleIndex == SIZE_MAX) {
+		return Colour(0, 0, 0);
+	}
+	
+	glm::vec3 point = intersection.intersectionPoint;
+	const ModelTriangle& tri = intersection.intersectedTriangle;
+	
+	// 如果是镜面，进行递归反射追踪
+	if (tri.isMirror) {
+		glm::vec3 reflectedDirection = GeometryUtils::calculateReflectedRay(rayDirection, tri.normal);
+		glm::vec3 reflectedOrigin = point + tri.normal * EPSILON;
+		Colour reflectedColour = traceRay(reflectedOrigin, reflectedDirection, triangles, texture, sphereStartIndex, sphereCount, depth + 1);
+		
+		// 根据反射率混合颜色
+		return Colour(
+			(uint8_t)(reflectedColour.red * tri.reflectivity),
+			(uint8_t)(reflectedColour.green * tri.reflectivity),
+			(uint8_t)(reflectedColour.blue * tri.reflectivity)
+		);
+	}
+	
+	glm::vec3 edge0 = tri.vertices[1] - tri.vertices[0];
+	glm::vec3 edge1 = tri.vertices[2] - tri.vertices[0];
+	glm::vec3 toPoint = point - tri.vertices[0];
+	
+	float dot00 = glm::dot(edge0, edge0);
+	float dot01 = glm::dot(edge0, edge1);
+	float dot11 = glm::dot(edge1, edge1);
+	float dot20 = glm::dot(toPoint, edge0);
+	float dot21 = glm::dot(toPoint, edge1);
+	float denominator = dot00 * dot11 - dot01 * dot01;
+	
+	float bary_v = (dot11 * dot20 - dot01 * dot21) / denominator;
+	float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
+	float bary_u = 1.0f - bary_v - bary_w;
+	
+	// 检查是否为球体
+	bool isSphere = (sphereStartIndex >= 0 && 
+	                 (int)intersection.triangleIndex >= sphereStartIndex && 
+	                 (int)intersection.triangleIndex < sphereStartIndex + sphereCount);
+	
+	// 用重心坐标插值顶点法线（仅在球体上使用Phong shading）
+	glm::vec3 interpolatedNormal;
+	if (isSphere) {
+		// 球体使用插值法线 (Phong shading)
+		std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
+		interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
+	} else {
+		// 其他物体使用三角形法线 (flat shading)
+		interpolatedNormal = tri.normal;
+	}
+	
+	float proximity = Lighting::calculateProximity(point, light.position);
+	float angle = Lighting::calculateAngleOfIncidence(point, interpolatedNormal, light.position);
+	float diffuse = proximity * angle;
+	float specular = Lighting::calculateSpecular(point, interpolatedNormal, light.position, rayOrigin);
+	
+	float shadowFactor = Lighting::calculateSoftShadow(point, intersection.triangleIndex, triangles);
+	
+	float Brightness = light.ambient + (diffuse + specular) * shadowFactor;
+	Brightness = std::min(1.0f, Brightness);
+	
+	bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||
+	                    tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||
+	                    tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
+	Colour colourValue = tri.colour;
+	
+	if (hasTexture && texture != nullptr) {
+		// 用重心坐标插值纹理坐标
+		glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
+		glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
+		glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
+		glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
+		
+		// 从纹理采样
+		int texX = round(textureCoord.x * texture->width);
+		int texY = round(textureCoord.y * texture->height);
+		texX = std::max(0, std::min((int)texture->width - 1, texX));
+		texY = std::max(0, std::min((int)texture->height - 1, texY));
+		uint32_t textureColour = texture->pixels[texY * texture->width + texX];
 
-void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
+		colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
+	}
+	
+	return Colour(
+		(uint8_t)std::min(255u, (uint32_t)(colourValue.red * Brightness)),
+		(uint8_t)std::min(255u, (uint32_t)(colourValue.green * Brightness)),
+		(uint8_t)std::min(255u, (uint32_t)(colourValue.blue * Brightness))
+	);
+}
+
+void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr, int sphereStartIndex = -1, int sphereCount = 0){
 	// Detect number of CPU cores
 	unsigned int numThreads = std::thread::hardware_concurrency();
-	if (numThreads == 0) numThreads = 4; // Fallback to 4 threads if detection fails
+	if (numThreads == 0) numThreads = 4;
 	
 	// Calculate rows per thread
 	int rowsPerThread = HEIGHT / numThreads;
@@ -317,64 +417,10 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 				glm::vec3 rayDirection = GeometryUtils::pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
 				const float v = 1e-4f;            
 				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
-				RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin,rayDirection,triangles);
 				
-				if(intersection.triangleIndex != SIZE_MAX){
-					glm::vec3 point = intersection.intersectionPoint;
-					const ModelTriangle& tri = intersection.intersectedTriangle;
-					
-					glm::vec3 edge0 = tri.vertices[1] - tri.vertices[0];
-					glm::vec3 edge1 = tri.vertices[2] - tri.vertices[0];
-					glm::vec3 toPoint = point - tri.vertices[0];
-					
-					float dot00 = glm::dot(edge0, edge0);
-					float dot01 = glm::dot(edge0, edge1);
-					float dot11 = glm::dot(edge1, edge1);
-					float dot20 = glm::dot(toPoint, edge0);
-					float dot21 = glm::dot(toPoint, edge1);
-					float denominator = dot00 * dot11 - dot01 * dot01;
-					
-					float bary_v = (dot11 * dot20 - dot01 * dot21) / denominator;
-					float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
-					float bary_u = 1.0f - bary_v - bary_w;
-					
-					// 用重心坐标插值顶点法线
-					std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
-					glm::vec3 interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
-					
-					float proximity = Lighting::calculateProximity(point, light.position);
-					float angle = Lighting::calculateAngleOfIncidence(point, interpolatedNormal, light.position);
-					float diffuse = proximity * angle;
-					float specular = Lighting::calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
-					
-					float shadowFactor = Lighting::calculateSoftShadow(point, intersection.triangleIndex, triangles);
-					
-					float Brightness = light.ambient + (diffuse + specular) * shadowFactor;
-					Brightness = std::min(1.0f, Brightness);
-					
-					bool hasTexture = (tri.texturePoints[0].x != 0 || tri.texturePoints[0].y != 0 ||tri.texturePoints[1].x != 0 || tri.texturePoints[1].y != 0 ||tri.texturePoints[2].x != 0 || tri.texturePoints[2].y != 0);
-					Colour colourValue = tri.colour;
-					
-					if (hasTexture && texture != nullptr) {
-						// 用重心坐标插值纹理坐标
-						glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
-						glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
-						glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
-						glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
-						
-						// 从纹理采样
-						int texX = round(textureCoord.x * texture->width);
-						int texY = round(textureCoord.y * texture->height);
-						texX = std::max(0, std::min((int)texture->width - 1, texX));
-						texY = std::max(0, std::min((int)texture->height - 1, texY));
-						uint32_t textureColour = texture->pixels[texY * texture->width + texX];
-
-						colourValue = Colour((textureColour >> 16) & 255, (textureColour >> 8) & 255, textureColour & 255);
-					}
-					
-					uint32_t colour = (255u << 24) + (std::min(255u, (uint32_t)(colourValue.red * Brightness)) << 16) + (std::min(255u, (uint32_t)(colourValue.green * Brightness)) << 8) + (std::min(255u, (uint32_t)(colourValue.blue * Brightness)));
-					window.setPixelColour(x, y, colour);
-				}
+				Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, 0);
+				uint32_t colour = (255u << 24) + ((uint32_t)pixelColour.red << 16) + ((uint32_t)pixelColour.green << 8) + (uint32_t)pixelColour.blue;
+				window.setPixelColour(x, y, colour);
 			}
 		}
 	};
@@ -510,7 +556,7 @@ int main(int argc, char *argv[]){
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
-			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture);
+			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture, sphereStartIndex, (int)trianglesSphere.size());
             break;
     	}
 		window.renderFrame();
