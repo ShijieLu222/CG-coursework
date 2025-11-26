@@ -1,0 +1,3 @@
+/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles/RedNoise.dir
+/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles/edit_cache.dir
+/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles/rebuild_cache.dir

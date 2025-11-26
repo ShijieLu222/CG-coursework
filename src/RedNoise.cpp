@@ -17,6 +17,9 @@
 #include <chrono>
 #include <iomanip>
 #include <random>
+#include "FileLoader.h"
+#include "GeometryUtils.h"
+#include "Lighting.h"
 #define WIDTH  640
 #define HEIGHT 480
 
@@ -29,17 +32,12 @@ struct Camera {
     bool autoRotate;
 };
 
-struct Light {
-    glm::vec3 position;
-    float ambient;
-};
-
 struct Scene {
     RenderMode mode;
     glm::vec3 center;
 };
 
-// 全局变量
+// global variables
 Camera camera = {
     glm::vec3(0.0f, 0.0f, 4.0f),    // position
     glm::mat3(1.0f),                // orientation
@@ -57,146 +55,8 @@ Scene scene = {
     glm::vec3(0.0f, 0.0f, 0.0f)   // center
 };
 
-// 存储顶点法线
-std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;
+std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;//store vertex normals
 
-glm::mat3 rotX(float a) {
-    float c = std::cos(a), s = std::sin(a);
-    return glm::mat3( 1,0,0,   
-					  0,c,s,
-					  0,-s,c );
-}
-
-glm::mat3 rotY(float a) {
-    float c = std::cos(a), s = std::sin(a);
-    return glm::mat3( c,0,-s,
-	               0,1,0,
-	  			   s,0,c );
-}
-
-std::vector<ModelTriangle> loadOBJ(const std::string& filePath,const std::map<std::string,Colour>& palette,float scale){
-    std::string line; //store the line
-    std::vector<glm::vec3> vertices;
-    std::vector<glm::vec2> textureCoords;
-    std::vector<ModelTriangle> triangles;
-    std::ifstream inputFile(filePath); //read file
-    std::string colourName;
-    Colour colour(255,255,255);
-    
-    if(!inputFile.is_open()){
-            std::cerr<<"fail to read"<<std::endl;
-            return triangles;
-    }
-
-    while (std::getline(inputFile, line)) {
-        std::vector<std::string> tokens = split(line,' ');//每当遇到一个空格，就切一刀
-
-        if (tokens.empty()) {continue;} // 跳过空行，处理下一行
-
-        if (tokens[0] == "v"){
-            float x = std::stof(tokens[1])*scale; //string to float
-            float y = std::stof(tokens[2])*scale;
-            float z = std::stof(tokens[3])*scale;
-            vertices.push_back(glm::vec3(x, y, z));
-        }
-        else if (tokens[0] == "vt"){ // 纹理坐标
-            float u = std::stof(tokens[1]);
-            float v = std::stof(tokens[2]);
-            textureCoords.push_back(glm::vec2(u, v));
-        }
-        else if (tokens[0]=="usemtl")
-        {
-            colourName = tokens[1];
-            colour = palette.at(colourName);
-        }
-        else if (tokens[0] == "f"){
-            // 支持 "f v" 和 "f v/vt" 格式
-            std::vector<std::string> v0Parts = split(tokens[1], '/');
-            std::vector<std::string> v1Parts = split(tokens[2], '/');
-            std::vector<std::string> v2Parts = split(tokens[3], '/');
-            
-            // 获取顶点坐标
-            glm::vec3 v0 = vertices[std::stoi(v0Parts[0])-1];
-            glm::vec3 v1 = vertices[std::stoi(v1Parts[0])-1];
-            glm::vec3 v2 = vertices[std::stoi(v2Parts[0])-1];
-
-			glm::vec3 edge0 = v1 - v0;
-			glm::vec3 edge1 = v2 - v0;
-			glm::vec3 normal = glm::normalize(glm::cross(edge0, edge1));
-
-			ModelTriangle triangle(v0, v1, v2, colour);
-			triangle.normal = normal;
-			
-			// 如果有纹理坐标，添加到三角形
-			if (v0Parts.size() > 1 && !v0Parts[1].empty() && !textureCoords.empty()) {
-			    int t0Index = std::stoi(v0Parts[1]) - 1;
-			    int t1Index = std::stoi(v1Parts[1]) - 1;
-			    int t2Index = std::stoi(v2Parts[1]) - 1;
-			    
-			    triangle.texturePoints[0] = TexturePoint(textureCoords[t0Index].x, textureCoords[t0Index].y);
-			    triangle.texturePoints[1] = TexturePoint(textureCoords[t1Index].x, textureCoords[t1Index].y);
-			    triangle.texturePoints[2] = TexturePoint(textureCoords[t2Index].x, textureCoords[t2Index].y);
-			}
-			
-			triangles.push_back(triangle);
-        }
-        
-    }
-    inputFile.close();
-    return triangles;
-}
-
-std::map<std::string,Colour> loadMTL(const std::string& filePath){
-    std::map<std::string, Colour> palette;
-    Colour colour;
-    std::string colourName;
-    std::string line;
-    std::ifstream inputFile(filePath);
-
-    if(!inputFile.is_open()){
-            std::cerr<<"fail to read"<<std::endl;
-            return palette;
-    }
-
-    while(std::getline(inputFile,line)){
-        std::vector<std::string> tokens = split(line,' ');
-
-        if (tokens.empty()) {continue;}
-
-        if (tokens[0] == "newmtl"){
-            colourName = (tokens[1]);
-        }else if (tokens[0]== "Kd"){
-            float r_float = std::stof(tokens[1]);
-            float g_float = std::stof(tokens[2]);
-            float b_float = std::stof(tokens[3]);
-    
-            int r = (r_float * 255.0f);
-            int g = (g_float * 255.0f);
-            int b = (b_float * 255.0f);
-            colour =Colour(r,g,b);
-            palette[colourName] = colour;
-        }
-    }
-    inputFile.close();
-    return palette;
-}
-
-CanvasPoint projectVertexOntoCanvasPoint(const glm::vec3 &cameraPosition,float focalLength, const glm::vec3 &vertexPosition,const glm::mat3 &cameraOrientation){
-    glm::vec3 vertexRelativeToCamera = vertexPosition - cameraPosition;
-    float scale = 160.0f;
-
-    glm::vec3 Pcamera = vertexRelativeToCamera * cameraOrientation;
-
-    float x =Pcamera.x;
-    float y =Pcamera.y;
-    float z =Pcamera.z;
-    float u =focalLength * (x/-z)*scale + (WIDTH/2.0f);
-    float v =focalLength * (-y/-z)*scale + (HEIGHT/2.0f);
-    float depth = 1.0f / -z;
-    
-
-    return CanvasPoint(u,v,depth);
-}
 
 void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint &to, const Colour &colour, std::vector<std::vector<float>> &depths){
 	float xDiff = to.x - from.x;
@@ -263,7 +123,6 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	extraP.texturePoint.y = sortedPs[0].texturePoint.y + ratio * (sortedPs[2].texturePoint.y - sortedPs[0].texturePoint.y);
 
 	extraP.depth = sortedPs[0].depth + ratio * (sortedPs[2].depth - sortedPs[0].depth);
-
 
 	return extraP;
 }
@@ -347,7 +206,6 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 
 		for (int x = xLstart; x < xRstart; x++){
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-
 				glm::vec3 baryCentric = convertToBarycentricCoordinates(
 					glm::vec2(v0.x, v0.y), 
 					glm::vec2(v1.x, v1.y), 
@@ -396,9 +254,9 @@ void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, 
     const float minValidDepth = 0.0f;
 
     for (ModelTriangle triangle : triangles){
-		CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
-		CanvasPoint projectedPoint1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
-		CanvasPoint projectedPoint2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
+		CanvasPoint projectedPoint0 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
+		CanvasPoint projectedPoint1 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
+		CanvasPoint projectedPoint2 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
 		
 		if (projectedPoint0.depth < minValidDepth  ||projectedPoint1.depth < minValidDepth ||projectedPoint2.depth < minValidDepth ) {
 			continue;
@@ -412,9 +270,9 @@ void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, 
 void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths, const TextureMap *texture = nullptr) {
 	const float minValidDepth = 0.0f;
 	for (const ModelTriangle& triangle : triangles){
-			CanvasPoint projectedPoint0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
-			CanvasPoint projectedPoint1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
-			CanvasPoint projectedPoint2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
+			CanvasPoint projectedPoint0 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
+			CanvasPoint projectedPoint1 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
+			CanvasPoint projectedPoint2 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
 			
 			// depth = 1/-z，makesure depth not be too small
 			if (projectedPoint0.depth < minValidDepth  ||projectedPoint1.depth < minValidDepth ||projectedPoint2.depth < minValidDepth ) {
@@ -440,148 +298,6 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 	}
 }
 
-glm::mat3 lookAt(const glm::vec3 &camera, const glm::vec3 &target, const glm::vec3 &worldUp = {0,1,0}){ //get cameraOrientation matrix
-	glm::vec3 F = glm::normalize(target - camera);
-	glm::vec3 R = glm::normalize(glm::cross(F, worldUp));
-	glm::vec3 U = glm::normalize(glm::cross(R, F));
-
-	return glm::mat3(R.x,R.y,R.z, 
-					 U.x,U.y,U.z, 
-		            -F.x,-F.y,-F.z);
-}
-
-glm::vec3 pixelToRayDirection(int x, int y,int width, int height, float focalLength, const glm::mat3& cameraOrientation){
-	//plane的左上角的坐标系转成plane中心的坐标系统的3D点的方向向量
-	float scale =160.0f;
-	float px = (x  - width  * 0.5f)/scale;
-    float py = (y  - height * 0.5f)/scale;
-    py = -py;
-
-	glm::vec3 cameraDirection = glm::normalize(glm::vec3(px,py,-focalLength));
-	glm::vec3 RayDirection = glm::normalize(cameraOrientation * cameraDirection);// 旋到真实的世界坐标
-	return RayDirection;
-}
-
-RayTriangleIntersection getClosestValidIntersection(const glm::vec3 &cameraPosition,const glm::vec3 &rayDirection,std::vector<ModelTriangle>& triangles, size_t ignoreIndex = SIZE_MAX){ //lab6
-    glm::vec3 direction = glm::normalize(rayDirection); //单位化
-    float bestT = std::numeric_limits<float>::max(); // 当前最优（最小）t，初始为最大值
-    RayTriangleIntersection bestIntercetion;
-    bestIntercetion.triangleIndex =SIZE_MAX; //if not intercepted
-
-    for (int i = 0; i < triangles.size(); i++) {
-        // 修复：跳过被忽略的三角形（用于避免阴影自相交）
-        if (i == ignoreIndex) continue;
-
-        const ModelTriangle triangle = triangles[i];
-
-        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
-        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
-        glm::mat3 DEMatrix(-direction, e0, e1);
-        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
-
-        float t = possibleSolution.x; //沿着光线方向从相机走了多远才到交点
-        float u = possibleSolution.y; //交点在三角形第 1 条边方向上的比例
-        float v = possibleSolution.z; //交点在三角形第 2 条边方向上的比例
-        float w =1-u-v;
-
-        if (!((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1 && t > 0.001f)) continue;        // 必须做命中判定 task3
-
-        if(t<bestT){
-            bestT = t;
-            // glm::vec3 intersection = cameraPosition + t * rayDirection;
-            glm::vec3 intersection = triangle.vertices[0] + u * e0 + v * e1;
-            bestIntercetion.distanceFromCamera =t;
-            bestIntercetion.intersectionPoint=intersection;
-            bestIntercetion.triangleIndex=i;
-            bestIntercetion.intersectedTriangle =triangle;
-        }
-    }
-    return bestIntercetion;
-}
-
-float calculateSoftShadow(const glm::vec3& point, size_t selfIndex, std::vector<ModelTriangle>& triangles){
-    int numSamples = 8;        // 采样次数（减少以提升性能）
-    float lightRadius = 0.15f;  // 光源半径
-    int visibleSamples = 0;
-
-    // 修复：使用线程安全的随机数生成器，解决多线程导致的噪点
-    static thread_local std::mt19937 generator(std::hash<std::thread::id>{}(std::this_thread::get_id()));
-    std::uniform_real_distribution<float> dist(-lightRadius, lightRadius);
-
-    for (int i = 0; i < numSamples; i++) {
-        // 生成随机偏移（立方体内采样，快速）
-        glm::vec3 randomOffset(dist(generator), dist(generator), dist(generator));
-
-        glm::vec3 currentLightPos = light.position + randomOffset;
-        glm::vec3 toLight = currentLightPos - point;
-        float distToLight = glm::length(toLight);
-        
-        if (distToLight <= 1e-6f) {
-            visibleSamples++;
-            continue;
-        }
-        
-        glm::vec3 lightDir = glm::normalize(toLight);
-        glm::vec3 rayOrigin = point + lightDir * 0.001f;   
-        RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin, lightDir, triangles, selfIndex);
-
-        // 检查光线是否被遮挡
-        if (intersection.triangleIndex == SIZE_MAX || intersection.distanceFromCamera > distToLight) {
-            visibleSamples++;
-        }
-    }
-    return (float)visibleSamples / (float)numSamples;
-}
-
-float calculateProximity(const glm::vec3& target,const glm::vec3& lightPosition){
-	float distanceToLight = glm::length(lightPosition - target);
-	float proximity = 10.0f / (4.0f * M_PI *distanceToLight * distanceToLight);
-	return std::min(1.0f,proximity) ;
-}
-
-float calculateAngleOfIncidence(const glm::vec3& intersectionPoint, const glm::vec3& normal, const glm::vec3& lightPosition){
-	glm::vec3 N = glm::normalize(normal);
-    glm::vec3 toLight = glm::normalize(lightPosition - intersectionPoint);
-    float angle = glm::dot(N, toLight);
-	return std::max(0.0f, angle);
-}
-
-float calculateSpecular(const glm::vec3& intersectionPoint, const glm::vec3& normal, const glm::vec3& lightPosition, const glm::vec3& cameraPosition) {
-	glm::vec3 N = glm::normalize(normal);
-	glm::vec3 L = glm::normalize(lightPosition - intersectionPoint); 
-	glm::vec3 V = glm::normalize(cameraPosition - intersectionPoint); 
-	glm::vec3 R = 2.0f * glm::dot(N, L) * N - L;
-
-	float specular = glm::dot(R, V); 
-	return std::pow(std::max(0.0f, specular), 256);
-}
-
-// 计算顶点法线
-void computeVertexNormals(const std::vector<ModelTriangle>& triangles, int startIndex = 0) {
-	std::array<glm::vec3, 3> vertexNormals;
-
-    for (int i = 0; i < triangles.size(); i++) {
-        for (int v = 0; v < 3; v++) {
-            glm::vec3 normal(0.0f);
-            glm::vec3 vertex = triangles[i].vertices[v];
-            
-            // 找到所有包含这个顶点的三角形，加起来它们的法线
-            for (int j = 0; j < triangles.size(); j++) {
-                for (int k = 0; k < 3; k++) {
-                    if (glm::length(triangles[j].vertices[k] - vertex) < 0.001f) {
-                        normal = normal + triangles[j].normal;
-                        break;
-                    }
-                }
-            }
-            
-            vertexNormals[v] = glm::normalize(normal);
-        }
-        
-        vertexNormalsMap[startIndex + i] = vertexNormals;
-    }
-}
 
 void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr){
 	// Detect number of CPU cores
@@ -598,10 +314,10 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 	auto renderRows = [&](int startY, int endY) {
 		for(int y = startY; y < endY; y++){
 			for(int x = 0; x < WIDTH; x++){
-				glm::vec3 rayDirection = pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
+				glm::vec3 rayDirection = GeometryUtils::pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
 				const float v = 1e-4f;            
 				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
-				RayTriangleIntersection intersection = getClosestValidIntersection(rayOrigin,rayDirection,triangles);
+				RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin,rayDirection,triangles);
 				
 				if(intersection.triangleIndex != SIZE_MAX){
 					glm::vec3 point = intersection.intersectionPoint;
@@ -626,12 +342,12 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 					std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
 					glm::vec3 interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
 					
-					float proximity = calculateProximity(point, light.position);
-					float angle = calculateAngleOfIncidence(point, interpolatedNormal, light.position);
+					float proximity = Lighting::calculateProximity(point, light.position);
+					float angle = Lighting::calculateAngleOfIncidence(point, interpolatedNormal, light.position);
 					float diffuse = proximity * angle;
-					float specular = calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
+					float specular = Lighting::calculateSpecular(point, interpolatedNormal, light.position, cameraPosition);
 					
-					float shadowFactor = calculateSoftShadow(point, intersection.triangleIndex, triangles);
+					float shadowFactor = Lighting::calculateSoftShadow(point, intersection.triangleIndex, triangles);
 					
 					float Brightness = light.ambient + (diffuse + specular) * shadowFactor;
 					Brightness = std::min(1.0f, Brightness);
@@ -666,7 +382,12 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 	// Spawn threads
 	for (unsigned int i = 0; i < numThreads; i++) {
 		int startY = i * rowsPerThread;
-		int endY = (i == numThreads - 1) ? HEIGHT : (i + 1) * rowsPerThread;
+		int endY;
+		if (i == numThreads){
+			endY =  HEIGHT;
+		} else {
+			endY =  (i + 1) * rowsPerThread;
+		}
 		threads.emplace_back(renderRows, startY, endY);
 	}
 	
@@ -684,20 +405,20 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 	if (event.type == SDL_KEYDOWN){
 		if (event.key.keysym.sym == SDLK_LEFT){
 			std::cout << "LEFT" << std::endl;
-			camera.position = scene.center + rotY(rotation)*(camera.position-scene.center);
-			camera.orientation = lookAt(camera.position, scene.center);
+			camera.position = scene.center + GeometryUtils::rotY(rotation)*(camera.position-scene.center);
+			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_RIGHT){
 			std::cout << "RIGHT" << std::endl;
-			camera.position = scene.center + rotY(-rotation)*(camera.position-scene.center);
-			camera.orientation = lookAt(camera.position, scene.center);
+			camera.position = scene.center + GeometryUtils::rotY(-rotation)*(camera.position-scene.center);
+			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_UP){
 			std::cout << "UP" << std::endl;
-			camera.position = scene.center + rotX(rotation)*(camera.position-scene.center);
-			camera.orientation = lookAt(camera.position, scene.center);
+			camera.position = scene.center + GeometryUtils::rotX(rotation)*(camera.position-scene.center);
+			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_DOWN){
 			std::cout << "DOWN" << std::endl;
-			camera.position = scene.center + rotX(-rotation)*(camera.position-scene.center);
-			camera.orientation = lookAt(camera.position, scene.center);
+			camera.position = scene.center + GeometryUtils::rotX(-rotation)*(camera.position-scene.center);
+			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}
 		switch (event.key.keysym.sym){
 		case SDLK_1:scene.mode = RenderMode::Wireframe;break;
@@ -711,10 +432,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 		case SDLK_q: camera.position.z = camera.position.z - translation;break;
 		case SDLK_e: camera.position.z = camera.position.z + translation;break;
 
-		case SDLK_j: camera.orientation = camera.orientation * rotY(+orientation); break; // j:pan 
-		case SDLK_k: camera.orientation = camera.orientation * rotY(-orientation); break; // k:pan 
-		case SDLK_i: camera.orientation = camera.orientation * rotX(+orientation); break; // i:tilt 
-		case SDLK_o: camera.orientation = camera.orientation * rotX(-orientation); break; // o:tilt
+		case SDLK_j: camera.orientation = camera.orientation * GeometryUtils::rotY(+orientation); break; // j:pan 
+		case SDLK_k: camera.orientation = camera.orientation * GeometryUtils::rotY(-orientation); break; // k:pan 
+		case SDLK_i: camera.orientation = camera.orientation * GeometryUtils::rotX(+orientation); break; // i:tilt 
+		case SDLK_o: camera.orientation = camera.orientation * GeometryUtils::rotX(-orientation); break; // o:tilt
 
 		case SDLK_r: camera.autoRotate = !camera.autoRotate; break;
 		}
@@ -730,18 +451,14 @@ int main(int argc, char *argv[]){
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 
-	std::map<std::string, Colour> paletteTexturedBox = loadMTL("src/textured-cornell-box.mtl");
-    std::vector<ModelTriangle> trianglesTexturedBox = loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
+	std::map<std::string, Colour> paletteTexturedBox = FileLoader::loadMTL("src/textured-cornell-box.mtl");
+    std::vector<ModelTriangle> trianglesTexturedBox = FileLoader::loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
 
     TextureMap texture("texture.ppm");
 
-    // Logo
-    // std::map<std::string, Colour> paletteLogo = loadMTL("hackspace-logo/materials.mtl");
-    // std::vector<ModelTriangle> trianglesLogo = loadOBJ("hackspace-logo/logo.obj", paletteLogo, 0.0035f);
-
     // 添加红色球体
-    std::map<std::string, Colour> paletteSphere = loadMTL("src/sphere.mtl");
-    std::vector<ModelTriangle> trianglesSphere = loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
+    std::map<std::string, Colour> paletteSphere = FileLoader::loadMTL("src/sphere.mtl");
+    std::vector<ModelTriangle> trianglesSphere = FileLoader::loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
 	
 	// add fixed translation to sphere -- z 负数是往后，正数是往前（靠近相机）
 	glm::vec3 offset(0.4f, -1.1f, -0.9f);
@@ -757,9 +474,12 @@ int main(int argc, char *argv[]){
 	int sphereStartIndex = (int)allTriangles.size();  // sphere 在合并向量中的起始索引
 	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
 	
+	// 初始化光源
+	Lighting::setLight(light);
+	
 	// 计算所有模型的顶点法线用于 Gouraud Shading
-	computeVertexNormals(trianglesTexturedBox, 0);
-	computeVertexNormals(trianglesSphere, sphereStartIndex);
+	GeometryUtils::computeVertexNormals(trianglesTexturedBox, vertexNormalsMap, 0);
+	GeometryUtils::computeVertexNormals(trianglesSphere, vertexNormalsMap, sphereStartIndex);
 
 	// FPS计数
 	int fps = 0;
@@ -770,8 +490,8 @@ int main(int argc, char *argv[]){
 			handleEvent(event, window);
 
 		if (camera.autoRotate) {
-        	camera.position = scene.center + rotY(glm::radians(0.5f)) * (camera.position - scene.center);
-        	camera.orientation = lookAt(camera.position, scene.center);
+        	camera.position = scene.center + GeometryUtils::rotY(glm::radians(0.5f)) * (camera.position - scene.center);
+        	camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
     	} 
 
 	window.clearPixels();
@@ -782,13 +502,11 @@ int main(int argc, char *argv[]){
 	switch (scene.mode) {
         case RenderMode::Wireframe:
             drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths);
-			// drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesLogo, depths);
 			drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths);
             break;
         case RenderMode::Rasterised:
             // 传递纹理给 texturedBox，自动判断每个三角形是否有纹理
             drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths, &texture);
-			// drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesLogo, depths, nullptr);
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
