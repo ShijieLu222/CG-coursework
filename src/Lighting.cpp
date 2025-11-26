@@ -35,18 +35,15 @@ float Lighting::calculateSpecular(const glm::vec3& intersectionPoint, const glm:
 }
 
 float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, std::vector<ModelTriangle>& triangles){
-    int numSamples = 8;        // 采样次数（减少以提升性能）
-    float lightRadius = 0.15f;  // 光源半径
+    int numSamples = 8;      
+    float lightRadius = 0.15f; 
     int visibleSamples = 0;
 
-    // 修复：使用线程安全的随机数生成器，解决多线程导致的噪点
-    static thread_local std::mt19937 generator(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    std::mt19937 generator(222);
     std::uniform_real_distribution<float> dist(-lightRadius, lightRadius);
 
     for (int i = 0; i < numSamples; i++) {
-        // 生成随机偏移（立方体内采样，快速）
         glm::vec3 randomOffset(dist(generator), dist(generator), dist(generator));
-
         glm::vec3 currentLightPos = light.position + randomOffset;
         glm::vec3 toLight = currentLightPos - point;
         float distToLight = glm::length(toLight);
@@ -60,11 +57,12 @@ float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, st
         glm::vec3 rayOrigin = point + lightDir * 0.001f;   
         RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin, lightDir, triangles, selfIndex);
 
-        // 检查光线是否被遮挡
+        // check if intersection is beyond the light ray
         if (intersection.triangleIndex == SIZE_MAX || intersection.distanceFromCamera > distToLight) {
             visibleSamples++;
         }
     }
-    return (float)visibleSamples / (float)numSamples;
+    float ratio = (float)visibleSamples / (float)numSamples;
+    return ratio;
 }
 

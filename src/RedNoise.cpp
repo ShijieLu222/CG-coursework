@@ -214,11 +214,10 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 				);
 				
 				// 只有重心坐标全部非负才绘制-确保在三角形内
-				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0) {
-					// 计算深度：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0){
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
-					if (pixelDepth > depths[y][x]) {
+					if (pixelDepth > depths[y][x]){
 						if (texture != nullptr) {
 							glm::vec2 t0(v0.texturePoint.x, v0.texturePoint.y);
 							glm::vec2 t1(v1.texturePoint.x, v1.texturePoint.y);
@@ -226,7 +225,7 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 							glm::vec2 texturePoint = baryCentric.z * t0 + baryCentric.x * t1 + baryCentric.y * t2;
 							uint32_t texColour = texture->pixels[round(texturePoint.y * texture->height) * texture->width + round(texturePoint.x * texture->width)];
 							window.setPixelColour(x, y, texColour);
-						} else {
+						}else{
 							window.setPixelColour(x, y, colourValue);
 						}
 						depths[y][x] = pixelDepth;
@@ -244,7 +243,6 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 	CanvasPoint mid = sortedPs[1];
 	CanvasPoint bottom = sortedPs[2];
 	
-	// 传入原始三角形顶点用于重心坐标计算，并传递纹理指针
 	fillFlatTopTriangle(window, bottom, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2], texture);
 	fillFlatBottomTriangle(window, top, mid, extraP, colour, depths, triangle.vertices[0], triangle.vertices[1], triangle.vertices[2], texture);
 
@@ -411,7 +409,7 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 	std::vector<std::thread> threads;
 	
 	// Lambda function to process a range of rows
-	auto renderRows = [&](int startY, int endY) {
+	auto renderRows = [&](int startY, int endY){
 		for(int y = startY; y < endY; y++){
 			for(int x = 0; x < WIDTH; x++){
 				glm::vec3 rayDirection = GeometryUtils::pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
@@ -444,9 +442,9 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window){
-	float rotation = glm::radians(5.0f);      // 每次转
-	float orientation = glm::radians(5.0f);   // 旋转朝向
-	static float translation  = 0.25f;        // 平移
+	float rotation = glm::radians(5.0f);      // angle change for rotation
+	float orientation = glm::radians(5.0f);   // angle change for orientation
+	static float translation  = 0.25f;        // translation distance
 
 	if (event.type == SDL_KEYDOWN){
 		if (event.key.keysym.sym == SDLK_LEFT){
@@ -499,14 +497,11 @@ int main(int argc, char *argv[]){
 
 	std::map<std::string, Colour> paletteTexturedBox = FileLoader::loadMTL("src/textured-cornell-box.mtl");
     std::vector<ModelTriangle> trianglesTexturedBox = FileLoader::loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
-
     TextureMap texture("texture.ppm");
-
-    // 添加红色球体
     std::map<std::string, Colour> paletteSphere = FileLoader::loadMTL("src/sphere.mtl");
     std::vector<ModelTriangle> trianglesSphere = FileLoader::loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
 	
-	// add fixed translation to sphere -- z 负数是往后，正数是往前（靠近相机）
+	// add fixed translation to sphere -- z negative is towards the camera
 	glm::vec3 offset(0.4f, -1.1f, -0.9f);
 	for (auto& tri : trianglesSphere) {
     tri.vertices[0] += offset;
@@ -514,20 +509,19 @@ int main(int argc, char *argv[]){
     tri.vertices[2] += offset;
 	}
 	
-	// 合并所有三角形用于光线追踪
+	// combine all triangles for ray tracing
 	std::vector<ModelTriangle> allTriangles;
 	allTriangles.insert(allTriangles.end(), trianglesTexturedBox.begin(), trianglesTexturedBox.end());
 	int sphereStartIndex = (int)allTriangles.size();  // sphere 在合并向量中的起始索引
 	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
 	
-	// 初始化光源
 	Lighting::setLight(light);
 	
-	// 计算所有模型的顶点法线用于 Gouraud Shading
+	// calculate normals for Gouraud Shading
 	GeometryUtils::computeVertexNormals(trianglesTexturedBox, vertexNormalsMap, 0);
 	GeometryUtils::computeVertexNormals(trianglesSphere, vertexNormalsMap, sphereStartIndex);
 
-	// FPS计数
+	// FPS counter
 	int fps = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 
