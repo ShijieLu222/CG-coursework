@@ -20,6 +20,7 @@
 #include "FileLoader.h"
 #include "GeometryUtils.h"
 #include "Lighting.h"
+#include "Environment.h"
 #define WIDTH  640
 #define HEIGHT 480
 
@@ -296,7 +297,7 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 	}
 }
 
-Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::vector<ModelTriangle> &triangles, const TextureMap *texture, int sphereStartIndex, int sphereCount, int depth = 0) {
+Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::vector<ModelTriangle> &triangles, const TextureMap *texture, int sphereStartIndex, int sphereCount, const Environment &environment, int depth = 0) {
 	const int MAX_REFLECTION_DEPTH = 3;
 	const float EPSILON = 1e-4f;
 	
@@ -307,7 +308,7 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin, rayDirection, triangles);
 	
 	if (intersection.triangleIndex == SIZE_MAX) {
-		return Colour(0, 0, 0);
+		return environment.sampleEnvironment(rayDirection);
 	}
 	
 	glm::vec3 point = intersection.intersectionPoint;
@@ -317,7 +318,7 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	if (tri.isMirror) {
 		glm::vec3 reflectedDirection = GeometryUtils::calculateReflectedRay(rayDirection, tri.normal);
 		glm::vec3 reflectedOrigin = point + tri.normal * EPSILON;
-		Colour reflectedColour = traceRay(reflectedOrigin, reflectedDirection, triangles, texture, sphereStartIndex, sphereCount, depth + 1);
+		Colour reflectedColour = traceRay(reflectedOrigin, reflectedDirection, triangles, texture, sphereStartIndex, sphereCount, environment, depth + 1);
 		
 		// 根据反射率混合颜色
 		return Colour(
@@ -397,7 +398,7 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	);
 }
 
-void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr, int sphereStartIndex = -1, int sphereCount = 0){
+void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr, int sphereStartIndex = -1, int sphereCount = 0, const Environment *environment = nullptr){
 	// Detect number of CPU cores
 	unsigned int numThreads = std::thread::hardware_concurrency();
 	if (numThreads == 0) numThreads = 4;
@@ -416,7 +417,9 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 				const float v = 1e-4f;            
 				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
 				
-				Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, 0);
+				Environment defaultEnv; // fallback environment
+				const Environment& env = environment != nullptr ? *environment : defaultEnv;
+				Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, env, 0);
 				uint32_t colour = (255u << 24) + ((uint32_t)pixelColour.red << 16) + ((uint32_t)pixelColour.green << 8) + (uint32_t)pixelColour.blue;
 				window.setPixelColour(x, y, colour);
 			}
@@ -517,6 +520,10 @@ int main(int argc, char *argv[]){
 	
 	Lighting::setLight(light);
 	
+	// Load environment HDR map
+	FileLoader::EnvironmentData envData = FileLoader::loadEnvironmentHDR("src/passendorf_snow_1k.hdr");
+	Environment environment(envData);
+	
 	// calculate normals for Gouraud Shading
 	GeometryUtils::computeVertexNormals(trianglesTexturedBox, vertexNormalsMap, 0);
 	GeometryUtils::computeVertexNormals(trianglesSphere, vertexNormalsMap, sphereStartIndex);
@@ -550,7 +557,7 @@ int main(int argc, char *argv[]){
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
             break;
         case RenderMode::RayTraced:
-			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture, sphereStartIndex, (int)trianglesSphere.size());
+			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture, sphereStartIndex, (int)trianglesSphere.size(), &environment);
             break;
     	}
 		window.renderFrame();

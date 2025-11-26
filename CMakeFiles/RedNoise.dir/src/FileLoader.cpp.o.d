@@ -890,4 +890,5 @@ CMakeFiles/RedNoise.dir/src/FileLoader.cpp.o: \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/libs/sdw/TexturePoint.h \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/libs/sdw/Utils.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/fstream \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem \
+  /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/src/../libs/stb/stb_image.h

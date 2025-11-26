@@ -17,6 +17,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/RedNoise.dir/libs/sdw/TexturePoint.cpp.o.d"
   "CMakeFiles/RedNoise.dir/libs/sdw/Utils.cpp.o"
   "CMakeFiles/RedNoise.dir/libs/sdw/Utils.cpp.o.d"
+  "CMakeFiles/RedNoise.dir/src/Environment.cpp.o"
+  "CMakeFiles/RedNoise.dir/src/Environment.cpp.o.d"
   "CMakeFiles/RedNoise.dir/src/FileLoader.cpp.o"
   "CMakeFiles/RedNoise.dir/src/FileLoader.cpp.o.d"
   "CMakeFiles/RedNoise.dir/src/GeometryUtils.cpp.o"

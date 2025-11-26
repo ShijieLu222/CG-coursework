@@ -240,10 +240,24 @@ CMakeFiles/RedNoise.dir/src/Lighting.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/RedNoise.dir/src/Lighting.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/Lighting.cpp" -o CMakeFiles/RedNoise.dir/src/Lighting.cpp.s
 
+CMakeFiles/RedNoise.dir/src/Environment.cpp.o: CMakeFiles/RedNoise.dir/flags.make
+CMakeFiles/RedNoise.dir/src/Environment.cpp.o: src/Environment.cpp
+CMakeFiles/RedNoise.dir/src/Environment.cpp.o: CMakeFiles/RedNoise.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/RedNoise.dir/src/Environment.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/RedNoise.dir/src/Environment.cpp.o -MF CMakeFiles/RedNoise.dir/src/Environment.cpp.o.d -o CMakeFiles/RedNoise.dir/src/Environment.cpp.o -c "/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/Environment.cpp"
+
+CMakeFiles/RedNoise.dir/src/Environment.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/RedNoise.dir/src/Environment.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/Environment.cpp" > CMakeFiles/RedNoise.dir/src/Environment.cpp.i
+
+CMakeFiles/RedNoise.dir/src/Environment.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/RedNoise.dir/src/Environment.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/Environment.cpp" -o CMakeFiles/RedNoise.dir/src/Environment.cpp.s
+
 CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o: CMakeFiles/RedNoise.dir/flags.make
 CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o: src/RedNoise.cpp
 CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o: CMakeFiles/RedNoise.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o -MF CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o.d -o CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o -c "/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/RedNoise.cpp"
 
 CMakeFiles/RedNoise.dir/src/RedNoise.cpp.i: cmake_force
@@ -268,6 +282,7 @@ RedNoise_OBJECTS = \
 "CMakeFiles/RedNoise.dir/src/FileLoader.cpp.o" \
 "CMakeFiles/RedNoise.dir/src/GeometryUtils.cpp.o" \
 "CMakeFiles/RedNoise.dir/src/Lighting.cpp.o" \
+"CMakeFiles/RedNoise.dir/src/Environment.cpp.o" \
 "CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o"
 
 # External object files for target RedNoise
@@ -285,11 +300,12 @@ RedNoise: CMakeFiles/RedNoise.dir/libs/sdw/Utils.cpp.o
 RedNoise: CMakeFiles/RedNoise.dir/src/FileLoader.cpp.o
 RedNoise: CMakeFiles/RedNoise.dir/src/GeometryUtils.cpp.o
 RedNoise: CMakeFiles/RedNoise.dir/src/Lighting.cpp.o
+RedNoise: CMakeFiles/RedNoise.dir/src/Environment.cpp.o
 RedNoise: CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o
 RedNoise: CMakeFiles/RedNoise.dir/build.make
 RedNoise: /opt/homebrew/Cellar/sdl2/2.32.10/lib/libSDL2.dylib
 RedNoise: CMakeFiles/RedNoise.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_14) "Linking CXX executable RedNoise"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_15) "Linking CXX executable RedNoise"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/RedNoise.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

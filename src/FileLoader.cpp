@@ -4,6 +4,9 @@
 #include <glm/glm.hpp>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
+#define STB_IMAGE_IMPLEMENTATION
+#include "../libs/stb/stb_image.h"
 
 std::vector<ModelTriangle> FileLoader::loadOBJ(const std::string& filePath, const std::map<std::string, Colour>& palette, float scale) {
     std::string line;
@@ -111,5 +114,22 @@ std::map<std::string, Colour> FileLoader::loadMTL(const std::string& filePath) {
     }
     inputFile.close();
     return palette;
+}
+
+FileLoader::EnvironmentData FileLoader::loadEnvironmentHDR(const std::string& filename) {
+    EnvironmentData envData;
+    envData.isValid = false;
+    
+    int channels;
+    float* hdrData = stbi_loadf(filename.c_str(), &envData.width, &envData.height, &channels, 3);
+    
+    // copy data to container
+    envData.hdrPixels.resize(envData.width * envData.height * 3);
+    std::copy(hdrData, hdrData + envData.width * envData.height * 3, envData.hdrPixels.begin());
+    
+    stbi_image_free(hdrData);
+    envData.isValid = true;
+    
+    return envData;
 }
 
