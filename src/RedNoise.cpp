@@ -500,7 +500,7 @@ int main(int argc, char *argv[]){
 
 	std::map<std::string, Colour> paletteTexturedBox = FileLoader::loadMTL("src/textured-cornell-box.mtl");
     std::vector<ModelTriangle> trianglesTexturedBox = FileLoader::loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
-    TextureMap texture("texture.ppm");
+    TextureMap texture("src/texture.ppm");
     std::map<std::string, Colour> paletteSphere = FileLoader::loadMTL("src/sphere.mtl");
     std::vector<ModelTriangle> trianglesSphere = FileLoader::loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
 	
