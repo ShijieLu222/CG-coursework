@@ -21,6 +21,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(GLM_INCLUDE_DIRS libs/glm-0.9.7.2)
 
 find_package(SDL2 REQUIRED)
+find_package(Threads REQUIRED)
 
 include_directories(${SDL2_INCLUDE_DIRS} ${GLM_INCLUDE_DIRS})
 include_directories(libs/sdw)
@@ -67,6 +68,10 @@ else ()
 
     set(DEBUG_OPTIONS -O2 -fno-omit-frame-pointer -g)
     set(RELEASE_OPTIONS -O3 -march=native -mtune=native)
+    if(UNIX AND NOT APPLE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
+    endif()
+    target_link_libraries(RedNoise PRIVATE Threads::Threads)
     target_link_libraries(RedNoise PUBLIC $<$<CONFIG:Debug>:-Wl>)
 
 endif()
