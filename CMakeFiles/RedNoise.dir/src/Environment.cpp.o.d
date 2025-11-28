@@ -888,7 +888,4 @@ CMakeFiles/RedNoise.dir/src/Environment.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/map \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__tree \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/libs/sdw/ModelTriangle.h \
-  /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/libs/sdw/TexturePoint.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/fstream \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem \
-  /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/src/../libs/stb/stb_image.h
+  /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/libs/sdw/TexturePoint.h
