@@ -65,14 +65,14 @@ void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint 
 	float numberOfSteps = std::max(abs(xDiff), abs(yDiff));
 	float xStepSize = xDiff / numberOfSteps;
 	float yStepSize = yDiff / numberOfSteps;
-	float depthStep = (to.depth - from.depth) / numberOfSteps;  // 深度插值步长
+	float depthStep = (to.depth - from.depth) / numberOfSteps;  // depth interpolation step
 	
 	uint32_t colourValue = (255u << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue);
 	
 	for (float i = 0.0; i <= numberOfSteps; i++){
 		float x = from.x + xStepSize * i;
 		float y = from.y + yStepSize * i;
-		float depth = from.depth + depthStep * i;  // 当前像素的深度
+		float depth = from.depth + depthStep * i;  // current pixel depth
 
 		if (x >= 0 && x < window.width && y >= 0 && y < window.height){
 			int xi = round(x);
@@ -80,7 +80,7 @@ void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint 
 			
 			if (depth != 0 && (depths[yi][xi] == 0 || 1.0f/depth > depths[yi][xi])){
 				window.setPixelColour(xi, yi, colourValue);
-				depths[yi][xi] = 1.0f/depth;  // 更新深度缓冲
+				depths[yi][xi] = 1.0f/depth;  // update depth buffer
 			}
 		}
 	}
@@ -116,10 +116,10 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	CanvasPoint extraP;
 	extraP.y = sortedPs[1].y;
 	float dy = sortedPs[2].y - sortedPs[0].y;
-	float ratio = (sortedPs[1].y - sortedPs[0].y) / dy; // 用y的计算比例，y的变化占比例eg 0.25，从top到mid
-	// 屏幕坐标插值
-	extraP.x = sortedPs[0].x + ratio * (sortedPs[2].x - sortedPs[0].x); // 拿比例 * top到bottom的总值 + top起始点的x
-	// 纹理坐标也要插值，这是关键！
+	float ratio = (sortedPs[1].y - sortedPs[0].y) / dy; // calculate ratio based on y, ratio of y change from top to mid, eg 0.25
+	// interpolate screen coordinates
+	extraP.x = sortedPs[0].x + ratio * (sortedPs[2].x - sortedPs[0].x); // ratio * (top to bottom total) + top starting x
+	// interpolate texture coordinates, this is important
 	extraP.texturePoint.x = sortedPs[0].texturePoint.x + ratio * (sortedPs[2].texturePoint.x - sortedPs[0].texturePoint.x);
 	extraP.texturePoint.y = sortedPs[0].texturePoint.y + ratio * (sortedPs[2].texturePoint.y - sortedPs[0].texturePoint.y);
 
@@ -128,7 +128,7 @@ CanvasPoint FindExtraP(std::vector<CanvasPoint> sortedPs){ // also for tuxture p
 	return extraP;
 }
 
-void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // 平顶三角形
+void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // flat top triangle
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
@@ -138,7 +138,7 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 		midLp = mid;
 	}
 
-	float dxL = (bottom.x - midLp.x) / (bottom.y - midLp.y); // 每下降1个像素行，x变化多少
+	float dxL = (bottom.x - midLp.x) / (bottom.y - midLp.y); // x change per pixel row
 	float dxR = (bottom.x - midRp.x) / (bottom.y - midRp.y);
 
 	int yStart = (int)std::ceil(midLp.y);
@@ -150,9 +150,9 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 		int xLstart = (int)std::floor(midLp.x + (y - midLp.y) * dxL);
         int xRstart = (int)std::ceil(midRp.x + (y - midRp.y) * dxR);
         
-		for (int x = xLstart; x < xRstart; x++){ //遍历每个像素
+		for (int x = xLstart; x < xRstart; x++){ // iterate each pixel
 			if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-				// 使用重心坐标判断是否在三角形内
+				// check if inside triangle using barycentric coordinates
 				glm::vec3 baryCentric = convertToBarycentricCoordinates(
 					glm::vec2(v0.x, v0.y), 
 					glm::vec2(v1.x, v1.y), 
@@ -160,9 +160,9 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// 只有重心坐标全部非负才绘制（确保在三角形内）
+				// draw only if all barycentric coordinates non-negative (ensure inside triangle)
 				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0) {
-					// 计算深度：baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
+					// calculate depth using barycentric: baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
 					if (pixelDepth > depths[y][x]) {
@@ -184,7 +184,7 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 	}
 }
 
-void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // 顶角三角形
+void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint mid, CanvasPoint extraP, Colour colour, std::vector<std::vector<float>> &depths, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, const TextureMap *texture){ // flat bottom triangle
 	CanvasPoint midLp, midRp;
 	if (mid.x > extraP.x){
 		midRp = mid;
@@ -194,7 +194,7 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 		midLp = mid;
 	}
 
-	float dxL = (midLp.x - top.x) / (midLp.y - top.y); // 每1个像素行，x变化多少
+	float dxL = (midLp.x - top.x) / (midLp.y - top.y); // x change per pixel row
 	float dxR = (midRp.x - top.x) / (midRp.y - top.y);
 
 	int yStart = (int)std::ceil(top.y);
@@ -214,7 +214,7 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// 只有重心坐标全部非负才绘制-确保在三角形内
+				// draw only if all barycentric coordinates non-negative (ensure inside triangle)
 				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0){
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
@@ -278,7 +278,7 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 				continue;
 			}
 			
-			// 传递纹理坐标到 CanvasPoint
+			// pass texture coordinates to CanvasPoint
 			projectedPoint0.texturePoint = triangle.texturePoints[0];
 			projectedPoint1.texturePoint = triangle.texturePoints[1];
 			projectedPoint2.texturePoint = triangle.texturePoints[2];
@@ -398,17 +398,15 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 }
 
 void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr, int sphereStartIndex = -1, int sphereCount = 0, const Environment *environment = nullptr){
-	// Detect number of CPU cores
+	//Detect number of CPU cores
 	unsigned int numThreads = std::thread::hardware_concurrency();
 	if (numThreads == 0) numThreads = 4;
 	
-	// Calculate rows per thread
+	//Calculate rows per thread
 	int rowsPerThread = HEIGHT / numThreads;
-	
-	// Vector to store thread handles
 	std::vector<std::thread> threads;
 	
-	// Lambda function to process a range of rows
+	//render rows from startY to endY
 	auto renderRows = [&](int startY, int endY){
 		for(int y = startY; y < endY; y++){
 			for(int x = 0; x < WIDTH; x++){
@@ -416,7 +414,7 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 				const float v = 1e-4f;            
 				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
 				
-				Environment defaultEnv; // fallback environment
+				Environment defaultEnv;
 				const Environment& env = environment != nullptr ? *environment : defaultEnv;
 				Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, env, 0);
 				uint32_t colour = (255u << 24) + ((uint32_t)pixelColour.red << 16) + ((uint32_t)pixelColour.green << 8) + (uint32_t)pixelColour.blue;
@@ -517,7 +515,7 @@ int main(int argc, char *argv[]){
 	// combine all triangles for ray tracing
 	std::vector<ModelTriangle> allTriangles;
 	allTriangles.insert(allTriangles.end(), trianglesTexturedBox.begin(), trianglesTexturedBox.end());
-	int sphereStartIndex = (int)allTriangles.size();  // sphere 在合并向量中的起始索引
+	int sphereStartIndex = (int)allTriangles.size();  // sphere start index in merged vector
 	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
 	
 	Lighting::setLight(light);
@@ -550,7 +548,7 @@ int main(int argc, char *argv[]){
 			drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths);
             break;
         case RenderMode::Rasterised:
-            // 传递纹理给 texturedBox，自动判断每个三角形是否有纹理
+            // pass texture to texturedBox, auto detect if triangle has texture
             drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths, &texture);
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
             break;

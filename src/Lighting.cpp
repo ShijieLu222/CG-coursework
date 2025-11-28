@@ -54,7 +54,7 @@ float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, st
         }
         
         glm::vec3 lightDir = glm::normalize(toLight);
-        glm::vec3 rayOrigin = point + lightDir * 0.001f;   
+        glm::vec3 rayOrigin = point + lightDir * (1e-4f);   // offset to avoid self intersection
         RayTriangleIntersection intersection = GeometryUtils::getClosestValidIntersection(rayOrigin, lightDir, triangles, selfIndex);
 
         // check if intersection is beyond the light ray

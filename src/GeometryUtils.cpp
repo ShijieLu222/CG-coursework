@@ -63,7 +63,6 @@ namespace GeometryUtils {
 
         for (int i = 0; i < triangles.size(); i++) {
             if (i == ignoreIndex) continue;
-
             const ModelTriangle triangle = triangles[i];
 
             glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
