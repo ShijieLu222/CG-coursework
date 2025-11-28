@@ -13,7 +13,6 @@
 #include <map>
 #include <string>
 #include <limits>
-#include <thread>
 #include <chrono>
 #include <iomanip>
 #include <random>
@@ -405,46 +404,19 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 }
 
 void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,const glm::mat3 &cOrientation,const float &focalLength,std::vector<ModelTriangle>triangles, const TextureMap *texture = nullptr, int sphereStartIndex = -1, int sphereCount = 0, const Environment *environment = nullptr){
-	//Detect number of CPU cores
-	unsigned int numThreads = std::thread::hardware_concurrency();
-	if (numThreads == 0) numThreads = 4;
+	Environment defaultEnv;
+	const Environment& env = environment != nullptr ? *environment : defaultEnv;
 	
-	//Calculate rows per thread
-	int rowsPerThread = HEIGHT / numThreads;
-	std::vector<std::thread> threads;
-	
-	//render rows from startY to endY
-	auto renderRows = [&](int startY, int endY){
-		for(int y = startY; y < endY; y++){
-			for(int x = 0; x < WIDTH; x++){
-				glm::vec3 rayDirection = GeometryUtils::pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
-				const float v = 1e-4f;            
-				glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
-				
-				Environment defaultEnv;
-				const Environment& env = environment != nullptr ? *environment : defaultEnv;
-				Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, env, 0);
-				uint32_t colour = (255u << 24) + ((uint32_t)pixelColour.red << 16) + ((uint32_t)pixelColour.green << 8) + (uint32_t)pixelColour.blue;
-				window.setPixelColour(x, y, colour);
-			}
+	for(int y = 0; y < HEIGHT; y++){
+		for(int x = 0; x < WIDTH; x++){
+			glm::vec3 rayDirection = GeometryUtils::pixelToRayDirection(x,y,WIDTH,HEIGHT,focalLength,cOrientation);
+			const float v = 1e-4f;            
+			glm::vec3 rayOrigin  = cameraPosition + rayDirection * v;
+			
+			Colour pixelColour = traceRay(rayOrigin, rayDirection, triangles, texture, sphereStartIndex, sphereCount, env, 0);
+			uint32_t colour = (255u << 24) + ((uint32_t)pixelColour.red << 16) + ((uint32_t)pixelColour.green << 8) + (uint32_t)pixelColour.blue;
+			window.setPixelColour(x, y, colour);
 		}
-	};
-	
-	// Spawn threads
-	for (unsigned int i = 0; i < numThreads; i++) {
-		int startY = i * rowsPerThread;
-		int endY;
-		if (i == numThreads){
-			endY =  HEIGHT;
-		} else {
-			endY = (i + 1) * rowsPerThread;
-		}
-		threads.emplace_back(renderRows, startY, endY);
-	}
-	
-	// Join all threads
-	for (auto& thread : threads) {
-		thread.join();
 	}
 }
 
