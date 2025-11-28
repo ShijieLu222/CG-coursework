@@ -1013,6 +1013,9 @@ CMakeFiles/RedNoise.dir/src/RedNoise.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__random/student_t_distribution.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__random/uniform_random_bit_generator.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__random/weibull_distribution.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stat.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_s_ifmt.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_filesec_t.h \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/src/FileLoader.h \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/src/GeometryUtils.h \
   /Users/ken/Documents/文稿\ -\ Mac/year3-uni/Graphics/CG2025/Weekly\ Workbooks/01\ Introduction\ and\ Orientation/extras/RedNoise/src/Lighting.h \

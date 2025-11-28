@@ -17,6 +17,9 @@
 #include <chrono>
 #include <iomanip>
 #include <random>
+#include <cstdlib>
+#include <sstream>
+#include <sys/stat.h>
 #include "FileLoader.h"
 #include "GeometryUtils.h"
 #include "Lighting.h"
@@ -57,6 +60,10 @@ Scene scene = {
 };
 
 std::map<size_t, std::array<glm::vec3, 3>> vertexNormalsMap;//store vertex normals
+
+// recording variables
+bool isRecording = false;
+int frameCount = 0;
 
 
 void drawLine(DrawingWindow &window, const CanvasPoint &from, const CanvasPoint &to, const Colour &colour, std::vector<std::vector<float>> &depths){
@@ -482,6 +489,17 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 		case SDLK_o: camera.orientation = camera.orientation * GeometryUtils::rotX(-orientation); break; // o:tilt
 
 		case SDLK_r: camera.autoRotate = !camera.autoRotate; break;
+		
+		case SDLK_b:
+			isRecording = !isRecording;
+			if (isRecording) {
+				frameCount = 0;
+			} else {
+				std::stringstream cmd;
+				cmd << "ffmpeg -r 30 -i src/frames/frame_%04d.ppm -c:v libx264 -pix_fmt yuv420p src/video.mp4 -y";
+				system(cmd.str().c_str());
+			}
+			break;
 		}
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN)
@@ -494,6 +512,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 int main(int argc, char *argv[]){
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
+	
+	// create frames directory if it doesn't exist
+	#ifdef _WIN32
+		system("if not exist src\\frames mkdir src\\frames");
+	#else
+		system("mkdir -p src/frames");
+	#endif
 
 	std::map<std::string, Colour> paletteTexturedBox = FileLoader::loadMTL("src/textured-cornell-box.mtl");
     std::vector<ModelTriangle> trianglesTexturedBox = FileLoader::loadOBJ("src/textured-cornell-box.obj", paletteTexturedBox, 0.35f);
@@ -557,6 +582,14 @@ int main(int argc, char *argv[]){
             break;
     	}
 		window.renderFrame();
+		
+		// save frame if recording
+		if (isRecording) {
+			std::stringstream filename;
+			filename << "src/frames/frame_" << std::setfill('0') << std::setw(4) << frameCount << ".ppm";
+			window.savePPM(filename.str());
+			frameCount++;
+		}
 
 		fps++;
 		auto currentTime = std::chrono::high_resolution_clock::now();
