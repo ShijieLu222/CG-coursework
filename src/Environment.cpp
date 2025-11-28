@@ -4,8 +4,7 @@
 
 Environment::Environment() : width(0), height(0), loaded(false) {}
 
-Environment::Environment(const FileLoader::EnvironmentData& envData) 
-    : width(envData.width), height(envData.height), loaded(envData.isValid) {
+Environment::Environment(const FileLoader::EnvironmentData& envData) : width(envData.width), height(envData.height), loaded(envData.isValid) {
     if (envData.isValid) {
         hdrData = envData.hdrPixels;
     }

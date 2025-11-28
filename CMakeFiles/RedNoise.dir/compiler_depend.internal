@@ -8162,10 +8162,8 @@ CMakeFiles/RedNoise.dir/src/Environment.cpp.o
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/errno.h
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/exception
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/execution
- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/format
- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/fstream
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/functional
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/initializer_list
  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/ios
@@ -8453,7 +8451,6 @@ CMakeFiles/RedNoise.dir/src/Environment.cpp.o
  /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/libs/sdw/Colour.h
  /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/libs/sdw/ModelTriangle.h
  /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/libs/sdw/TexturePoint.h
- /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/libs/stb/stb_image.h
  /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/Environment.h
  /Users/ken/Documents/文稿 - Mac/year3-uni/Graphics/CG2025/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/src/FileLoader.h
 

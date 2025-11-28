@@ -314,13 +314,12 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	glm::vec3 point = intersection.intersectionPoint;
 	const ModelTriangle& tri = intersection.intersectedTriangle;
 	
-	// 如果是镜面，进行递归反射追踪
+	// if mirror, recursively trace reflected ray
 	if (tri.isMirror) {
 		glm::vec3 reflectedDirection = GeometryUtils::calculateReflectedRay(rayDirection, tri.normal);
 		glm::vec3 reflectedOrigin = point + tri.normal * EPSILON;
 		Colour reflectedColour = traceRay(reflectedOrigin, reflectedDirection, triangles, texture, sphereStartIndex, sphereCount, environment, depth + 1);
 		
-		// 根据反射率混合颜色
 		return Colour(
 			(uint8_t)(reflectedColour.red * tri.reflectivity),
 			(uint8_t)(reflectedColour.green * tri.reflectivity),
@@ -343,19 +342,19 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	float bary_w = (dot00 * dot21 - dot01 * dot20) / denominator;
 	float bary_u = 1.0f - bary_v - bary_w;
 	
-	// 检查是否为球体
+	// check if is sphere
 	bool isSphere = (sphereStartIndex >= 0 && 
 	                 (int)intersection.triangleIndex >= sphereStartIndex && 
 	                 (int)intersection.triangleIndex < sphereStartIndex + sphereCount);
 	
-	// 用重心坐标插值顶点法线（仅在球体上使用Phong shading）
+	// use barycentric coordinates to interpolate vertex normals and only use for sphere
 	glm::vec3 interpolatedNormal;
 	if (isSphere) {
-		// 球体使用插值法线 (Phong shading)
+		// use interpolated normals for sphere
 		std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
 		interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
 	} else {
-		// 其他物体使用三角形法线 (flat shading)
+		// use triangle normals- flat shading
 		interpolatedNormal = tri.normal;
 	}
 	
@@ -375,13 +374,13 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	Colour colourValue = tri.colour;
 	
 	if (hasTexture && texture != nullptr) {
-		// 用重心坐标插值纹理坐标
+		// use barycentric coordinates to interpolate texture coordinates
 		glm::vec2 t0(tri.texturePoints[0].x, tri.texturePoints[0].y);
 		glm::vec2 t1(tri.texturePoints[1].x, tri.texturePoints[1].y);
 		glm::vec2 t2(tri.texturePoints[2].x, tri.texturePoints[2].y);
 		glm::vec2 textureCoord = bary_u * t0 + bary_v * t1 + bary_w * t2;
 		
-		// 从纹理采样
+		// sample from texture
 		int texX = round(textureCoord.x * texture->width);
 		int texY = round(textureCoord.y * texture->height);
 		texX = std::max(0, std::min((int)texture->width - 1, texX));
@@ -433,7 +432,7 @@ void drawRayTracedScene(DrawingWindow &window,const glm::vec3 &cameraPosition,co
 		if (i == numThreads){
 			endY =  HEIGHT;
 		} else {
-			endY =  (i + 1) * rowsPerThread;
+			endY = (i + 1) * rowsPerThread;
 		}
 		threads.emplace_back(renderRows, startY, endY);
 	}
@@ -503,6 +502,9 @@ int main(int argc, char *argv[]){
     TextureMap texture("src/texture.ppm");
     std::map<std::string, Colour> paletteSphere = FileLoader::loadMTL("src/sphere.mtl");
     std::vector<ModelTriangle> trianglesSphere = FileLoader::loadOBJ("src/sphere.obj", paletteSphere, 0.4f);
+	// Load environment HDR map
+	FileLoader::EnvironmentData envData = FileLoader::loadEnvironmentHDR("src/passendorf_snow_1k.hdr");
+	Environment environment(envData);
 	
 	// add fixed translation to sphere -- z negative is towards the camera
 	glm::vec3 offset(0.4f, -1.1f, -0.9f);
@@ -519,10 +521,6 @@ int main(int argc, char *argv[]){
 	allTriangles.insert(allTriangles.end(), trianglesSphere.begin(), trianglesSphere.end());
 	
 	Lighting::setLight(light);
-	
-	// Load environment HDR map
-	FileLoader::EnvironmentData envData = FileLoader::loadEnvironmentHDR("src/passendorf_snow_1k.hdr");
-	Environment environment(envData);
 	
 	// calculate normals for Gouraud Shading
 	GeometryUtils::computeVertexNormals(trianglesTexturedBox, vertexNormalsMap, 0);
@@ -543,7 +541,7 @@ int main(int argc, char *argv[]){
 
 	window.clearPixels();
 	
-	// 为每一帧创建一次深度缓冲，所有物体共享
+	// create depth buffer for each frame, all share the same depth buffer
 	std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
 	
 	switch (scene.mode) {
@@ -562,21 +560,16 @@ int main(int argc, char *argv[]){
     	}
 		window.renderFrame();
 
-		// FPS计数
 		fps++;
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed = currentTime - lastTime;
 		
-		// 每秒打印一次FPS
+		// print FPS every second
 		if (elapsed.count() >= 1.0) {
 			std::cout << "FPS: " << fps << std::endl;
 			fps = 0;
 			lastTime = currentTime;
 		}
-
-		// static int frame = 0; char name[128];
-        // sprintf(name, "frames/frame_%04d.bmp", frame++);
-        // window.saveBMP(name);
 	}
 	return 0;
 }
