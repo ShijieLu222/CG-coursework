@@ -397,9 +397,9 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	}
 	
 	return Colour(
-		(uint8_t)std::min(255u, (uint32_t)(colourValue.red * Brightness)),
-		(uint8_t)std::min(255u, (uint32_t)(colourValue.green * Brightness)),
-		(uint8_t)std::min(255u, (uint32_t)(colourValue.blue * Brightness))
+		(uint32_t)std::min(255u, (uint32_t)(colourValue.red * Brightness)),
+		(uint32_t)std::min(255u, (uint32_t)(colourValue.green * Brightness)),
+		(uint32_t)std::min(255u, (uint32_t)(colourValue.blue * Brightness))
 	);
 }
 
@@ -485,7 +485,7 @@ int main(int argc, char *argv[]){
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 	
-	// create frames directory if it doesn't exist
+	// create frames directory
 	#ifdef _WIN32
 		system("if not exist src\\frames mkdir src\\frames");
 	#else
