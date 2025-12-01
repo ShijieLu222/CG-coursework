@@ -26,8 +26,6 @@
 #define WIDTH  640
 #define HEIGHT 480
 
-enum class RenderMode { Wireframe = 1, Rasterised = 2, RayTraced = 3 };
-
 struct Camera {
     glm::vec3 position;
     glm::mat3 orientation;
@@ -36,7 +34,7 @@ struct Camera {
 };
 
 struct Scene {
-    RenderMode mode;
+    int mode;
     glm::vec3 center;
 };
 
@@ -54,7 +52,7 @@ Light light = {
 };
 
 Scene scene = {
-    RenderMode::Rasterised,        // mode
+    2,                              // mode: 1=Wireframe, 2=Rasterised,3=RayTraced
     glm::vec3(0.0f, 0.0f, 0.0f)   // center
 };
 
@@ -444,9 +442,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}
 		switch (event.key.keysym.sym){
-		case SDLK_1:scene.mode = RenderMode::Wireframe;break;
-        case SDLK_2:scene.mode = RenderMode::Rasterised;break;
-        case SDLK_3:scene.mode = RenderMode::RayTraced;break;
+		case SDLK_1:scene.mode = 1;break;
+        case SDLK_2:scene.mode = 2;break;
+        case SDLK_3:scene.mode = 3;break;
 
 		case SDLK_a: camera.position.x = camera.position.x - translation;break;
 		case SDLK_d: camera.position.x = camera.position.x + translation;break;
@@ -539,20 +537,16 @@ int main(int argc, char *argv[]){
 	// create depth buffer for each frame, all share the same depth buffer
 	std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
 	
-	switch (scene.mode) {
-        case RenderMode::Wireframe:
+	if (scene.mode == 1) {
             drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths);
 			drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths);
-            break;
-        case RenderMode::Rasterised:
+        } else if (scene.mode == 2) {
             // pass texture to texturedBox, auto detect if triangle has texture
             drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths, &texture);
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
-            break;
-        case RenderMode::RayTraced:
+        } else if (scene.mode == 3) {
 			drawRayTracedScene(window, camera.position, camera.orientation, camera.focalLength, allTriangles, &texture, sphereStartIndex, (int)trianglesSphere.size(), &environment);
-            break;
-    	}
+        }
 		window.renderFrame();
 		
 		// save frame if recording
