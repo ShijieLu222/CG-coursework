@@ -15,16 +15,15 @@ Colour Environment::sampleEnvironment(const glm::vec3& direction) const {
         return Colour(0, 0, 0);
     }
     
-    // Convert direction to spherical coordinates
+    // convert direction to spherical coordinates
     glm::vec3 dir = glm::normalize(direction);
     float theta = std::atan2(dir.z, dir.x);
     float phi = std::acos(std::max(-1.0f, std::min(1.0f, dir.y)));
     
-    // Map to texture coordinates
+    // convert to texture coordinates
     float u = (theta + M_PI) / (2.0f * M_PI);
     float v = phi / M_PI;
     
-    // Sample from HDR texture
     int texX = (int)(u * (width - 1));
     int texY = (int)(v * (height - 1));
     texX = std::max(0, std::min(width - 1, texX));
@@ -35,7 +34,6 @@ Colour Environment::sampleEnvironment(const glm::vec3& direction) const {
     float g = hdrData[index + 1] * 255.0f;
     float b = hdrData[index + 2] * 255.0f;
     
-    // to valid colour range
     r = std::min(255.0f, r);
     g = std::min(255.0f, g);
     b = std::min(255.0f, b);

@@ -3,7 +3,6 @@
 #include <cmath>
 #include <limits>
 #include <random>
-#include <thread>
 
 Light Lighting::light = {glm::vec3(0.0f, 0.8f, 0.1f), 0.15f};
 
@@ -35,15 +34,15 @@ float Lighting::calculateSpecular(const glm::vec3& intersectionPoint, const glm:
 }
 
 float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, std::vector<ModelTriangle>& triangles){
-    int numSamples = 8;      
-    float lightRadius = 0.15f; 
+    int samples = 8;      
+    float radius = 0.15f; 
     int visibleSamples = 0;
 
-    std::mt19937 generator(222);
-    std::uniform_real_distribution<float> dist(-lightRadius, lightRadius);
+    std::mt19937 gen(222);
+    std::uniform_real_distribution<float> dist(-radius, radius);
 
-    for (int i = 0; i < numSamples; i++) {
-        glm::vec3 randomOffset(dist(generator), dist(generator), dist(generator));
+    for (int i = 0; i < samples; i++) {
+        glm::vec3 randomOffset(dist(gen), dist(gen), dist(gen));
         glm::vec3 currentLightPos = light.position + randomOffset;
         glm::vec3 toLight = currentLightPos - point;
         float distToLight = glm::length(toLight);
@@ -62,7 +61,7 @@ float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, st
             visibleSamples++;
         }
     }
-    float ratio = (float)visibleSamples / (float)numSamples;
+    float ratio = (float)visibleSamples / (float)samples;
     return ratio;
 }
 
