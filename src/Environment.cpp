@@ -2,12 +2,10 @@
 #include <cmath>
 #include <algorithm>
 
-Environment::Environment() : width(0), height(0), loaded(false) {}
+Environment::Environment() : width(0), height(0), loaded(false) {} 
 
 Environment::Environment(const FileLoader::EnvironmentData& envData) : width(envData.width), height(envData.height), loaded(envData.isValid) {
-    if (envData.isValid) {
-        hdrData = envData.hdrPixels;
-    }
+    if (envData.isValid) {hdrData = envData.hdrPixels;}
 }
 
 Colour Environment::sampleEnvironment(const glm::vec3& direction) const {
@@ -15,7 +13,6 @@ Colour Environment::sampleEnvironment(const glm::vec3& direction) const {
         return Colour(0, 0, 0);
     }
     
-    // convert direction to spherical coordinates
     glm::vec3 dir = glm::normalize(direction);
     float theta = std::atan2(dir.z, dir.x);
     float phi = std::acos(std::max(-1.0f, std::min(1.0f, dir.y)));
@@ -38,5 +35,5 @@ Colour Environment::sampleEnvironment(const glm::vec3& direction) const {
     g = std::min(255.0f, g);
     b = std::min(255.0f, b);
     
-    return Colour((uint8_t)r, (uint8_t)g, (uint8_t)b);
+    return Colour((uint32_t)r, (uint32_t)g, (uint32_t)b);
 }
