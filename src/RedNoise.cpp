@@ -34,7 +34,7 @@ struct Camera {
 };
 
 struct Scene {
-    int mode;
+    int mode;      // mode: 1=Wireframe, 2=Rasterised,3=RayTraced
     glm::vec3 center;
 };
 
@@ -52,7 +52,7 @@ Light light = {
 };
 
 Scene scene = {
-    2,                              // mode: 1=Wireframe, 2=Rasterised,3=RayTraced
+    2,                             
     glm::vec3(0.0f, 0.0f, 0.0f)   // center
 };
 
@@ -164,9 +164,7 @@ void fillFlatTopTriangle(DrawingWindow &window, CanvasPoint bottom, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// draw only if all barycentric coordinates non-negative (ensure inside triangle)
 				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0) {
-					// calculate depth using barycentric: baryCentric.z * v0 + baryCentric.x * v1 + baryCentric.y * v2
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
 					if (pixelDepth > depths[y][x]) {
@@ -218,7 +216,6 @@ void fillFlatBottomTriangle(DrawingWindow &window, CanvasPoint top, CanvasPoint 
 					glm::vec2(x, y)
 				);
 				
-				// draw only if all barycentric coordinates non-negative (ensure inside triangle)
 				if (baryCentric.x >= 0 && baryCentric.y >= 0 && baryCentric.z >= 0){
 					float pixelDepth = baryCentric.z * v0.depth + baryCentric.x * v1.depth + baryCentric.y * v2.depth;
 					
@@ -254,14 +251,12 @@ void drawFilledTriangle(DrawingWindow &window, const CanvasTriangle &triangle, c
 }
 
 void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths) {
-    const float minValidDepth = 0.0f;
-
     for (ModelTriangle triangle : triangles){
 		CanvasPoint projectedPoint0 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
 		CanvasPoint projectedPoint1 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
 		CanvasPoint projectedPoint2 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
 		
-		if (projectedPoint0.depth < minValidDepth  ||projectedPoint1.depth < minValidDepth ||projectedPoint2.depth < minValidDepth ) {
+		if (projectedPoint0.depth < 0.0f  ||projectedPoint1.depth < 0.0f ||projectedPoint2.depth < 0.0f ) {
 			continue;
 		}
 		
@@ -271,14 +266,12 @@ void drawWireframeScene(DrawingWindow &window, const glm::vec3 &cameraPosition, 
 }
 
 void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPosition, const glm::mat3 &cameraOrientation, float focalLength, const std::vector<ModelTriangle> &triangles, std::vector<std::vector<float>> &depths, const TextureMap *texture = nullptr) {
-	const float minValidDepth = 0.0f;
 	for (const ModelTriangle& triangle : triangles){
 			CanvasPoint projectedPoint0 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0],cameraOrientation);
 			CanvasPoint projectedPoint1 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1],cameraOrientation);
 			CanvasPoint projectedPoint2 = GeometryUtils::projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2],cameraOrientation);
 			
-			// depth = 1/-z，makesure depth not be too small
-			if (projectedPoint0.depth < minValidDepth  ||projectedPoint1.depth < minValidDepth ||projectedPoint2.depth < minValidDepth ) {
+			if (projectedPoint0.depth < 0.0f  ||projectedPoint1.depth < 0.0f ||projectedPoint2.depth < 0.0f ) {
 				continue;
 			}
 			
@@ -302,10 +295,10 @@ void drawRasterisedFilledScene(DrawingWindow &window, const glm::vec3 &cameraPos
 }
 
 Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::vector<ModelTriangle> &triangles, const TextureMap *texture, int sphereStartIndex, int sphereCount, const Environment &environment, int depth = 0) {
-	const int MAX_REFLECTION_DEPTH = 3;
-	const float EPSILON = 1e-4f;
+	int maxDepth = 3;
+	float eps = 1e-4f;
 	
-	if (depth > MAX_REFLECTION_DEPTH) {
+	if (depth > maxDepth) {
 		return Colour(0, 0, 0);
 	}
 	
@@ -318,10 +311,9 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	glm::vec3 point = intersection.intersectionPoint;
 	const ModelTriangle& tri = intersection.intersectedTriangle;
 	
-	// if mirror, recursively trace reflected ray
 	if (tri.isMirror) {
 		glm::vec3 reflectedDirection = GeometryUtils::calculateReflectedRay(rayDirection, tri.normal);
-		glm::vec3 reflectedOrigin = point + tri.normal * EPSILON;
+		glm::vec3 reflectedOrigin = point + tri.normal * eps;
 		Colour reflectedColour = traceRay(reflectedOrigin, reflectedDirection, triangles, texture, sphereStartIndex, sphereCount, environment, depth + 1);
 		
 		return Colour(
@@ -351,21 +343,19 @@ Colour traceRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, std::
 	                 (int)intersection.triangleIndex >= sphereStartIndex && 
 	                 (int)intersection.triangleIndex < sphereStartIndex + sphereCount);
 	
-	// use barycentric coordinates to interpolate vertex normals and only use for sphere
-	glm::vec3 interpolatedNormal;
+	glm::vec3 normal;
 	if (isSphere) {
 		// use interpolated normals for sphere
 		std::array<glm::vec3, 3> vertexNormals = vertexNormalsMap[intersection.triangleIndex];
-		interpolatedNormal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
+		normal = glm::normalize(bary_u * vertexNormals[0] + bary_v * vertexNormals[1] + bary_w * vertexNormals[2]);
 	} else {
-		// use triangle normals- flat shading
-		interpolatedNormal = tri.normal;
+		normal = tri.normal;
 	}
 	
 	float proximity = Lighting::calculateProximity(point, light.position);
-	float angle = Lighting::calculateAngleOfIncidence(point, interpolatedNormal, light.position);
+	float angle = Lighting::calculateAngleOfIncidence(point, normal, light.position);
 	float diffuse = proximity * angle;
-	float specular = Lighting::calculateSpecular(point, interpolatedNormal, light.position, rayOrigin);
+	float specular = Lighting::calculateSpecular(point, normal, light.position, rayOrigin);
 	
 	float shadowFactor = Lighting::calculateSoftShadow(point, intersection.triangleIndex, triangles);
 	
@@ -425,19 +415,15 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 
 	if (event.type == SDL_KEYDOWN){
 		if (event.key.keysym.sym == SDLK_LEFT){
-			std::cout << "LEFT" << std::endl;
 			camera.position = scene.center + GeometryUtils::rotY(rotation)*(camera.position-scene.center);
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_RIGHT){
-			std::cout << "RIGHT" << std::endl;
 			camera.position = scene.center + GeometryUtils::rotY(-rotation)*(camera.position-scene.center);
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_UP){
-			std::cout << "UP" << std::endl;
 			camera.position = scene.center + GeometryUtils::rotX(rotation)*(camera.position-scene.center);
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}else if (event.key.keysym.sym == SDLK_DOWN){
-			std::cout << "DOWN" << std::endl;
 			camera.position = scene.center + GeometryUtils::rotX(-rotation)*(camera.position-scene.center);
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
 		}
@@ -534,14 +520,13 @@ int main(int argc, char *argv[]){
 
 	window.clearPixels();
 	
-	// create depth buffer for each frame, all share the same depth buffer
+	// depth buffer for each frame, all share the same depth buffer
 	std::vector<std::vector<float>> depths(HEIGHT, std::vector<float>(WIDTH, 0.0f));
 	
 	if (scene.mode == 1) {
             drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths);
 			drawWireframeScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths);
         } else if (scene.mode == 2) {
-            // pass texture to texturedBox, auto detect if triangle has texture
             drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesTexturedBox, depths, &texture);
 			drawRasterisedFilledScene(window, camera.position, camera.orientation, camera.focalLength, trianglesSphere, depths, nullptr);
         } else if (scene.mode == 3) {
