@@ -426,27 +426,35 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 		}else if (event.key.keysym.sym == SDLK_DOWN){
 			camera.position = scene.center + GeometryUtils::rotX(-rotation)*(camera.position-scene.center);
 			camera.orientation = GeometryUtils::lookAt(camera.position, scene.center);
-		}
-		switch (event.key.keysym.sym){
-		case SDLK_1:scene.mode = 1;break;
-        case SDLK_2:scene.mode = 2;break;
-        case SDLK_3:scene.mode = 3;break;
-
-		case SDLK_a: camera.position.x = camera.position.x - translation;break;
-		case SDLK_d: camera.position.x = camera.position.x + translation;break;
-		case SDLK_w: camera.position.y = camera.position.y + translation;break;
-		case SDLK_s: camera.position.y = camera.position.y - translation;break;
-		case SDLK_q: camera.position.z = camera.position.z - translation;break;
-		case SDLK_e: camera.position.z = camera.position.z + translation;break;
-
-		case SDLK_j: camera.orientation = camera.orientation * GeometryUtils::rotY(+orientation); break; // j:pan 
-		case SDLK_k: camera.orientation = camera.orientation * GeometryUtils::rotY(-orientation); break; // k:pan 
-		case SDLK_i: camera.orientation = camera.orientation * GeometryUtils::rotX(+orientation); break; // i:tilt 
-		case SDLK_o: camera.orientation = camera.orientation * GeometryUtils::rotX(-orientation); break; // o:tilt
-
-		case SDLK_r: camera.autoRotate = !camera.autoRotate; break;
-		
-		case SDLK_b:
+		} else if (event.key.keysym.sym == SDLK_1) {
+			scene.mode = 1;
+		} else if (event.key.keysym.sym == SDLK_2) {
+			scene.mode = 2;
+		} else if (event.key.keysym.sym == SDLK_3) {
+			scene.mode = 3;
+		} else if (event.key.keysym.sym == SDLK_a) {
+			camera.position.x -= translation;
+		} else if (event.key.keysym.sym == SDLK_d) {
+			camera.position.x += translation;
+		} else if (event.key.keysym.sym == SDLK_w) {
+			camera.position.y += translation;
+		} else if (event.key.keysym.sym == SDLK_s) {
+			camera.position.y -= translation;
+		} else if (event.key.keysym.sym == SDLK_q) {
+			camera.position.z -= translation;
+		} else if (event.key.keysym.sym == SDLK_e) {
+			camera.position.z += translation;
+		} else if (event.key.keysym.sym == SDLK_j) {
+			camera.orientation = camera.orientation * GeometryUtils::rotY(orientation);
+		} else if (event.key.keysym.sym == SDLK_k) {
+			camera.orientation = camera.orientation * GeometryUtils::rotY(-orientation);
+		} else if (event.key.keysym.sym == SDLK_i) {
+			camera.orientation = camera.orientation * GeometryUtils::rotX(orientation);
+		} else if (event.key.keysym.sym == SDLK_o) {
+			camera.orientation = camera.orientation * GeometryUtils::rotX(-orientation);
+		} else if (event.key.keysym.sym == SDLK_r) {
+			camera.autoRotate = !camera.autoRotate;
+		} else if (event.key.keysym.sym == SDLK_b) { // record video
 			isRecording = !isRecording;
 			if (isRecording) {
 				frameCount = 0;
@@ -455,7 +463,6 @@ void handleEvent(SDL_Event event, DrawingWindow &window){
 				cmd << "ffmpeg -r 30 -i src/frames/frame_%04d.ppm -c:v libx264 -pix_fmt yuv420p src/video.mp4 -y";
 				system(cmd.str().c_str());
 			}
-			break;
 		}
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN)

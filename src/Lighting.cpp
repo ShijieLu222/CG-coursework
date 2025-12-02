@@ -38,11 +38,11 @@ float Lighting::calculateSoftShadow(const glm::vec3& point, size_t selfIndex, st
     float radius = 0.15f; 
     int visibleSamples = 0;
 
-    std::mt19937 gen(222);
+    std::mt19937 generator(222);
     std::uniform_real_distribution<float> dist(-radius, radius);
 
     for (int i = 0; i < samples; i++) {
-        glm::vec3 randomOffset(dist(gen), dist(gen), dist(gen));
+        glm::vec3 randomOffset(dist(generator), dist(generator), dist(generator));
         glm::vec3 currentLightPos = light.position + randomOffset;
         glm::vec3 toLight = currentLightPos - point;
         float distToLight = glm::length(toLight);
